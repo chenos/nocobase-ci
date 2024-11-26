@@ -5,6 +5,9 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       repository:
@@ -75,6 +78,7 @@ jobs:
         uses: actions/checkout@v4
         if: ${{ inputs.repository == 'pro-plugins' }}
         with:
+          repository: nocobase/pro-plugins
           path: packages/pro-plugins
           ref: ${{ inputs.branch || 'main' }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -82,7 +86,8 @@ jobs:
         uses: actions/checkout@v4
         if: ${{ inputs.repository != 'pro-plugins' }}
         with:
-          path: packages/pro-plugins
+          repository: nocobase/${{ inputs.repository }}
+          path: packages/pro-plugins/@nocobase/${{ inputs.repository }}
           ref: ${{ inputs.branch || 'main' }}
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Node.js ${{ matrix.node_version }}
