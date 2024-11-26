@@ -84,7 +84,7 @@ jobs:
           ref: ${{ inputs.baseBranch || inputs.branch || 'main' }}
       - name: Checkout pro-plugins
         uses: actions/checkout@v4
-        if: ${{ inputs.repository == 'pro-plugins' || inputs.repository == "" }}
+        if: ${{ inputs.repository == 'pro-plugins' || !inputs.repository }}
         with:
           repository: nocobase/pro-plugins
           path: packages/pro-plugins
