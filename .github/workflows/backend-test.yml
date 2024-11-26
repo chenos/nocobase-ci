@@ -53,6 +53,17 @@ jobs:
           MARIADB_ROOT_PASSWORD: password
           MARIADB_DATABASE: nocobase
         options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+      postgres:
+        image: postgres:11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: nocobase
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       REMOTE_MYSQL_HOST: mysql
       REMOTE_MYSQL_PORT: 3306
@@ -65,6 +76,12 @@ jobs:
       REMOTE_MARIADB_USER: root
       REMOTE_MARIADB_PASSWORD: password
       REMOTE_MARIADB_DB: nocobase
+
+      REMOTE_POSTGRES_HOST: postgres
+      REMOTE_POSTGRES_PORT: 5432
+      REMOTE_POSTGRES_USER: postgres
+      REMOTE_POSTGRES_PASSWORD: password
+      REMOTE_POSTGRES_DB: nocobase
 
     steps:
       - uses: actions/create-github-app-token@v1
@@ -157,6 +174,14 @@ jobs:
       REMOTE_POSTGRES_DB: nocobase
 
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase,pro-plugins,${{ inputs.repository }}
+          skip-token-revoke: true
       - name: Git safe directory
         run: git config --global --add safe.directory `pwd`
       - name: Checkout nocobase/nocobase
@@ -166,16 +191,18 @@ jobs:
           ref: ${{ inputs.baseBranch || inputs.branch || 'main' }}
       - name: Checkout pro-plugins
         uses: actions/checkout@v4
-        if: ${{ inputs.repository == 'pro-plugins' }}
+        if: ${{ inputs.repository == 'pro-plugins' || !inputs.repository }}
         with:
+          repository: nocobase/pro-plugins
           path: packages/pro-plugins
           ref: ${{ inputs.branch || 'main' }}
           token: ${{ steps.app-token.outputs.token }}
       - name: Checkout ${{ inputs.repository }}
         uses: actions/checkout@v4
-        if: ${{ inputs.repository != 'pro-plugins' }}
+        if: ${{ inputs.repository && inputs.repository != 'pro-plugins' }}
         with:
-          path: packages/pro-plugins
+          repository: nocobase/${{ inputs.repository }}
+          path: packages/pro-plugins/@nocobase/${{ inputs.repository }}
           ref: ${{ inputs.branch || 'main' }}
           token: ${{ steps.app-token.outputs.token }}
       - name: Use Node.js ${{ matrix.node_version }}
