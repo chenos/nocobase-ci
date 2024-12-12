@@ -21,6 +21,7 @@ on:
 jobs:
   backend-test:
     strategy:
+      fail-fast: false
       matrix:
         node_version: ['20']
         db:
@@ -139,6 +140,7 @@ jobs:
 
   postgres-test:
     strategy:
+      fail-fast: false
       matrix:
         node_version: ['20']
         db:
