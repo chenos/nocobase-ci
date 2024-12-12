@@ -155,6 +155,18 @@ jobs:
         image: redis:latest
         ports:
           - 6379:6379
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: nocobase
+        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+      mariadb:
+        image: mariadb:10.9
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: nocobase
+        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
       postgres:
         image: postgres:11
         env:
@@ -167,6 +179,18 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      REMOTE_MYSQL_HOST: mysql
+      REMOTE_MYSQL_PORT: 3306
+      REMOTE_MYSQL_USER: root
+      REMOTE_MYSQL_PASSWORD: password
+      REMOTE_MYSQL_DB: nocobase
+
+      REMOTE_MARIADB_HOST: mariadb
+      REMOTE_MARIADB_PORT: 3306
+      REMOTE_MARIADB_USER: root
+      REMOTE_MARIADB_PASSWORD: password
+      REMOTE_MARIADB_DB: nocobase
+
       REMOTE_POSTGRES_HOST: postgres
       REMOTE_POSTGRES_PORT: 5432
       REMOTE_POSTGRES_USER: postgres
