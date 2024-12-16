@@ -34,6 +34,25 @@ jobs:
           - dialect: mariadb
             host: mariadb
             port: 3306
+          - dialect: postgres
+            host: postgres
+            port: 5432
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            env:
+              - DB_SCHEMA: nocobase
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            env:
+              - COLLECTION_MANAGER_SCHEMA: user_schema
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            env:
+              - DB_SCHEMA: nocobase
+              - COLLECTION_MANAGER_SCHEMA: user_schema
         underscored: [true, false]
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
@@ -136,122 +155,5 @@ jobs:
           DB_USER: nocobase
           DB_PASSWORD: password
           DB_DATABASE: nocobase
-          DB_UNDERSCORED: ${{ matrix.underscored }}
-
-  postgres-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        node_version: ['20']
-        db:
-          - dialect: postgres
-            host: postgres
-            port: 5432
-        underscored: [true, false]
-        schema: [public, nocobase]
-        collection_schema: [public, user_schema]
-    runs-on: ubuntu-latest
-    container: node:${{ matrix.node_version }}
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
-      mariadb:
-        image: mariadb:10.9
-        env:
-          MARIADB_ROOT_PASSWORD: password
-          MARIADB_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
-      postgres:
-        image: postgres:11
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: nocobase
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      REMOTE_MYSQL_HOST: mysql
-      REMOTE_MYSQL_PORT: 3306
-      REMOTE_MYSQL_USER: root
-      REMOTE_MYSQL_PASSWORD: password
-      REMOTE_MYSQL_DB: nocobase
-
-      REMOTE_MARIADB_HOST: mariadb
-      REMOTE_MARIADB_PORT: 3306
-      REMOTE_MARIADB_USER: root
-      REMOTE_MARIADB_PASSWORD: password
-      REMOTE_MARIADB_DB: nocobase
-
-      REMOTE_POSTGRES_HOST: postgres
-      REMOTE_POSTGRES_PORT: 5432
-      REMOTE_POSTGRES_USER: postgres
-      REMOTE_POSTGRES_PASSWORD: password
-      REMOTE_POSTGRES_DB: nocobase
-
-    steps:
-      - uses: actions/create-github-app-token@v1
-        id: app-token
-        with:
-          app-id: ${{ vars.NOCOBASE_APP_ID }}
-          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
-          owner: nocobase
-          repositories: nocobase,pro-plugins,${{ inputs.repository }}
-          skip-token-revoke: true
-      - name: Git safe directory
-        run: git config --global --add safe.directory `pwd`
-      - name: Checkout nocobase/nocobase
-        uses: actions/checkout@v4
-        with:
-          repository: nocobase/nocobase
-          ref: ${{ inputs.baseBranch || inputs.branch || 'main' }}
-      - name: Checkout pro-plugins
-        uses: actions/checkout@v4
-        if: ${{ inputs.repository == 'pro-plugins' || !inputs.repository }}
-        with:
-          repository: nocobase/pro-plugins
-          path: packages/pro-plugins
-          ref: ${{ inputs.branch || 'main' }}
-          token: ${{ steps.app-token.outputs.token }}
-      - name: Checkout ${{ inputs.repository }}
-        uses: actions/checkout@v4
-        if: ${{ inputs.repository && inputs.repository != 'pro-plugins' }}
-        with:
-          repository: nocobase/${{ inputs.repository }}
-          path: packages/pro-plugins/@nocobase/${{ inputs.repository }}
-          ref: ${{ inputs.branch || 'main' }}
-          token: ${{ steps.app-token.outputs.token }}
-      - name: Use Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node_version }}
-          cache: 'yarn'
-      - name: Install project dependencies
-        run: yarn install
-      - name: Run test
-        run: |
-          yarn test --server packages/pro-plugins/@nocobase 
-        env:
-          LOGGER_LEVEL: error
-          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
-          DB_DIALECT: ${{ matrix.db.dialect }}
-          DB_HOST: ${{ matrix.db.host }}
-          DB_PORT: ${{ matrix.db.port }}
-          DB_STORAGE: /tmp/db.sqlite
-          DB_USER: postgres
-          DB_PASSWORD: password
-          DB_DATABASE: nocobase
-          DB_SCHEMA: ${{ matrix.schema }}
-          COLLECTION_MANAGER_SCHEMA: ${{ matrix.collection_schema }}
           DB_UNDERSCORED: ${{ matrix.underscored }}
 
