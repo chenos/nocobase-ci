@@ -10,13 +10,18 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      repository:
+      branch:
+        description: 'base branch'
+        required: true
+      nocobase_pr_number:
+        description: 'main repo pr number'
+      pro_repo:
         description: 'pro repository name'
         default: 'pro-plugins'
-      branch:
-        description: 'branch'
-      baseBranch:
-        description: 'baseBranch'
+      pro_pr_number:
+        description: 'pro repo pr number'
+      checkRunId:
+        description: 'check run id'
 
 jobs:
   backend-test:
@@ -99,7 +104,7 @@ jobs:
 
       REMOTE_POSTGRES_HOST: postgres
       REMOTE_POSTGRES_PORT: 5432
-      REMOTE_POSTGRES_USER: postgres
+      REMOTE_POSTGRES_USER: nocobase
       REMOTE_POSTGRES_PASSWORD: password
       REMOTE_POSTGRES_DB: nocobase
 
@@ -110,31 +115,60 @@ jobs:
           app-id: ${{ vars.NOCOBASE_APP_ID }}
           private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
           owner: nocobase
-          repositories: nocobase,pro-plugins,${{ inputs.repository }}
+          repositories: nocobase,pro-plugins,${{ inputs.pro_repo }}
           skip-token-revoke: true
       - name: Git safe directory
         run: git config --global --add safe.directory `pwd`
-      - name: Checkout nocobase/nocobase
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           repository: nocobase/nocobase
-          ref: ${{ inputs.baseBranch || inputs.branch || 'main' }}
+          ref: ${{ inputs.branch }}
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: true
+      - name: Checkout nocobase/nocobase pr
+        if: ${{ inputs.nocobase_pr_number != '' }}
+        shell: bash
+        run: |
+          gh pr checkout ${{ inputs.nocobase_pr_number }}
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Checkout pro-plugins
-        uses: actions/checkout@v4
-        if: ${{ inputs.repository == 'pro-plugins' || !inputs.repository }}
+        uses: actions/checkout@v3
+        if: ${{ inputs.pro_repo == 'pro-plugins' || !inputs.pro_repo }}
         with:
           repository: nocobase/pro-plugins
+          ref: ${{ inputs.branch }}
           path: packages/pro-plugins
-          ref: ${{ inputs.branch || 'main' }}
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
-      - name: Checkout ${{ inputs.repository }}
-        uses: actions/checkout@v4
-        if: ${{ inputs.repository && inputs.repository != 'pro-plugins' }}
+      - name: Checkout pro-plugins pr
+        if: ${{ (inputs.pro_repo == 'pro-plugins' || !inputs.pro_repo) && inputs.pro_pr_number != '' }}
+        shell: bash
+        run: |
+          cd ./packages/pro-plugins/
+          gh pr checkout ${{ inputs.pro_pr_number }}
+          cd ../../
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Checkout pro repo
+        uses: actions/checkout@v3
+        if: ${{ inputs.pro_repo != 'pro-plugins }}
         with:
-          repository: nocobase/${{ inputs.repository }}
-          path: packages/pro-plugins/@nocobase/${{ inputs.repository }}
-          ref: ${{ inputs.branch || 'main' }}
+          repository: nocobase/${{ inputs.pro_repo }}
+          ref: ${{ inputs.branch }}
+          path: packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+      - name: Checkout pro repo pr
+        if: ${{ inputs.pro_repo != 'pro-plugins' && inputs.pro_pr_number != '' }}
+        shell: bash
+        run: |
+          cd ./packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
+          gh pr checkout ${{ inputs.pro_pr_number }}
+          cd ../../../../
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Use Node.js ${{ matrix.node_version }}
         uses: actions/setup-node@v4
         with:
