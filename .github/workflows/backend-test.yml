@@ -36,9 +36,13 @@ jobs:
           - dialect: mysql
             host: mysql
             port: 3306
+            env:
+              - DB_USER: root
           - dialect: mariadb
             host: mariadb
             port: 3306
+            env:
+              - DB_USER: root
           - dialect: postgres
             host: postgres
             port: 5432
@@ -56,6 +60,7 @@ jobs:
             host: postgres
             port: 5432
             env:
+              - DB_USER: postgres
               - DB_SCHEMA: nocobase
               - COLLECTION_MANAGER_SCHEMA: user_schema
         underscored: [true, false]
@@ -81,7 +86,7 @@ jobs:
       postgres:
         image: postgres:11
         env:
-          POSTGRES_USER: root
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
           POSTGRES_DB: nocobase
         options: >-
@@ -104,7 +109,7 @@ jobs:
 
       REMOTE_POSTGRES_HOST: postgres
       REMOTE_POSTGRES_PORT: 5432
-      REMOTE_POSTGRES_USER: root
+      REMOTE_POSTGRES_USER: postgres
       REMOTE_POSTGRES_PASSWORD: password
       REMOTE_POSTGRES_DB: nocobase
 
@@ -186,7 +191,6 @@ jobs:
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
-          DB_USER: root
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
