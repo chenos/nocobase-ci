@@ -186,7 +186,7 @@ jobs:
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
-          DB_USER: nocobase
+          DB_USER: postgres
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
