@@ -37,12 +37,12 @@ jobs:
             host: mysql
             port: 3306
             env:
-              - DB_USER: root
+              DB_USER: root
           - dialect: mariadb
             host: mariadb
             port: 3306
             env:
-              - DB_USER: root
+              DB_USER: root
           - dialect: postgres
             host: postgres
             port: 5432
@@ -50,19 +50,19 @@ jobs:
             host: postgres
             port: 5432
             env:
-              - DB_SCHEMA: nocobase
+              DB_SCHEMA: nocobase
           - dialect: postgres
             host: postgres
             port: 5432
             env:
-              - COLLECTION_MANAGER_SCHEMA: user_schema
+              COLLECTION_MANAGER_SCHEMA: user_schema
           - dialect: postgres
             host: postgres
             port: 5432
             env:
-              - DB_USER: postgres
-              - DB_SCHEMA: nocobase
-              - COLLECTION_MANAGER_SCHEMA: user_schema
+              DB_USER: postgres
+              DB_SCHEMA: nocobase
+              COLLECTION_MANAGER_SCHEMA: user_schema
         underscored: [true, false]
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
