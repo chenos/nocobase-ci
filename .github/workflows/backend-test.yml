@@ -153,7 +153,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Checkout pro repo
         uses: actions/checkout@v3
-        if: ${{ inputs.pro_repo != 'pro-plugins' }}
+        if: ${{ inputs.pro_repo != 'pro-plugins' && inputs.pro_repo }}
         with:
           repository: nocobase/${{ inputs.pro_repo }}
           ref: ${{ inputs.branch }}
