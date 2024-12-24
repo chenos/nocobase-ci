@@ -36,33 +36,31 @@ jobs:
           - dialect: mysql
             host: mysql
             port: 3306
-            env:
-              DB_USER: root
+            db_user: root
           - dialect: mariadb
             host: mariadb
             port: 3306
-            env:
-              DB_USER: root
+            db_user: root
           - dialect: postgres
             host: postgres
             port: 5432
+            db_user: postgres
           - dialect: postgres
             host: postgres
             port: 5432
-            env:
-              DB_SCHEMA: nocobase
+            db_user: postgres
+            db_schema: nocobase
           - dialect: postgres
             host: postgres
             port: 5432
-            env:
-              COLLECTION_MANAGER_SCHEMA: user_schema
+            db_user: postgres
+            collection_manager_schema: user_schema
           - dialect: postgres
             host: postgres
             port: 5432
-            env:
-              DB_USER: postgres
-              DB_SCHEMA: nocobase
-              COLLECTION_MANAGER_SCHEMA: user_schema
+            db_user: postgres
+            db_schema: nocobase
+            collection_manager_schema: user_schema
         underscored: [true, false]
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
@@ -191,7 +189,10 @@ jobs:
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
+          DB_USER: ${{ matrix.db_user }} 
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
+          DB_SCHEMA: ${{ matrix.db_schema }}
+          COLLECTION_MANAGER_SCHEMA: ${{ matrix.collection_manager_schema }}
 
