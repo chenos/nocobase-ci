@@ -81,7 +81,7 @@ jobs:
       postgres:
         image: postgres:11
         env:
-          POSTGRES_USER: postgres
+          POSTGRES_USER: root
           POSTGRES_PASSWORD: password
           POSTGRES_DB: nocobase
         options: >-
@@ -104,7 +104,7 @@ jobs:
 
       REMOTE_POSTGRES_HOST: postgres
       REMOTE_POSTGRES_PORT: 5432
-      REMOTE_POSTGRES_USER: postgres
+      REMOTE_POSTGRES_USER: root
       REMOTE_POSTGRES_PASSWORD: password
       REMOTE_POSTGRES_DB: nocobase
 
@@ -186,7 +186,7 @@ jobs:
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
-          DB_USER: postgres
+          DB_USER: root
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
