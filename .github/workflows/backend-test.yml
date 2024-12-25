@@ -141,7 +141,7 @@ jobs:
           skip-token-revoke: true
       - name: Git safe directory
         run: git config --global --add safe.directory `pwd`
-      - uses: actions4gh/setup-gh@v1
+      - uses: actions4gh/setup-gh@v1.0.2
       - name: Checkout
         uses: actions/checkout@v3
         with:
