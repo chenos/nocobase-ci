@@ -93,7 +93,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
           MYSQL_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes: 
           - ${{ github.workspace }}/mysql:/etc/mysql/conf.d
       mariadb:
@@ -101,7 +101,7 @@ jobs:
         env:
           MARIADB_ROOT_PASSWORD: password
           MARIADB_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes: 
           - ${{ github.workspace }}/mariadb:/etc/mysql/conf.d
       postgres:
@@ -135,6 +135,15 @@ jobs:
       REMOTE_POSTGRES_DB: nocobase
 
     steps:
+      - uses: actions/checkout@v3
+      - name: Restart mysql
+        uses: docker://docker
+        with:
+          args: docker restart mysql
+      - name: Restart mariadb
+        uses: docker://docker
+        with:
+          args: docker restart mariadb
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
