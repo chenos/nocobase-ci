@@ -93,13 +93,13 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
           MYSQL_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
       mariadb:
         image: mariadb:10.9
         env:
           MARIADB_ROOT_PASSWORD: password
           MARIADB_DATABASE: nocobase
-        options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
       postgres:
         image: postgres:11
         env:
@@ -131,6 +131,19 @@ jobs:
       REMOTE_POSTGRES_DB: nocobase
 
     steps:
+      - name: Set up MySQL federated
+        id: setup-mysql-federated
+        if: ${{ matrix.db.dialect == 'mysql' }}
+        shell: bash
+        run: |
+          docker exec mysql mysql -uroot -ppassword -e "INSTALL PLUGIN federated SONAME 'ha_federated.so';"
+      - name: Set up MariaDB federated
+        id: setup-mariadb-federated
+        if: ${{ matrix.db.dialect == 'mariadb' }}
+        shell: bash
+        run: |
+          docker exec mariadb mariadb -uroot -ppassword -e "INSTALL SONAME 'ha_federated.so';"
+          docker exec mariadb mariadb -uroot -ppassword -e "INSTALL SONAME 'ha_federatedx.so';"
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
@@ -143,8 +156,6 @@ jobs:
         run: git config --global --add safe.directory `pwd`
       - name: Install the gh cli
         uses: ksivamuthu/actions-setup-gh-cli@v3
-        with:
-          version: 2.64.0
       - name: Checkout
         uses: actions/checkout@v3
         with:
