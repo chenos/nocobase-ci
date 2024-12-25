@@ -136,11 +136,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        if: ${{ matrix.db.dialect == 'mysql' || matrix.db.dialect == 'mariadb' }}
       - name: Restart mysql
+        if: ${{ matrix.db.dialect == 'mysql' }}
         uses: docker://docker
         with:
           args: docker restart mysql
       - name: Restart mariadb
+        if: ${{ matrix.db.dialect == 'mariadb' }}
         uses: docker://docker
         with:
           args: docker restart mariadb
