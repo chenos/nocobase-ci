@@ -150,7 +150,6 @@ jobs:
           submodules: true
       - name: Checkout nocobase/nocobase pr
         if: ${{ inputs.nocobase_pr_number != '' }}
-        shell: bash
         run: |
           gh pr checkout ${{ inputs.nocobase_pr_number }}
         env:
@@ -166,7 +165,6 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
       - name: Checkout pro-plugins pr
         if: ${{ (inputs.pro_repo == 'pro-plugins' || !inputs.pro_repo) && inputs.pro_pr_number != '' }}
-        shell: bash
         run: |
           cd ./packages/pro-plugins/
           gh pr checkout ${{ inputs.pro_pr_number }}
