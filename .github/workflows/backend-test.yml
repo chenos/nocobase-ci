@@ -82,7 +82,6 @@ jobs:
             collection_manager_schema: user_schema
         underscored: [true, false]
     runs-on: ubuntu-latest
-    container: node:${{ matrix.node_version }}
     services:
       redis:
         image: redis:latest
@@ -131,6 +130,10 @@ jobs:
       REMOTE_POSTGRES_DB: nocobase
 
     steps:
+      - name: Set Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node_version }}
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
@@ -150,6 +153,7 @@ jobs:
           submodules: true
       - name: Checkout nocobase/nocobase pr
         if: ${{ inputs.nocobase_pr_number != '' }}
+        shell: bash
         run: |
           gh pr checkout ${{ inputs.nocobase_pr_number }}
         env:
@@ -165,6 +169,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
       - name: Checkout pro-plugins pr
         if: ${{ (inputs.pro_repo == 'pro-plugins' || !inputs.pro_repo) && inputs.pro_pr_number != '' }}
+        shell: bash
         run: |
           cd ./packages/pro-plugins/
           gh pr checkout ${{ inputs.pro_pr_number }}
