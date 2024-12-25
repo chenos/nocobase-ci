@@ -95,7 +95,7 @@ jobs:
           MYSQL_DATABASE: nocobase
         options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes: 
-          - ${{ github.workspace }}/mysql/my.conf:/etc/mysql/my.conf
+          - ${{ github.workspace }}/mysql:/etc/mysql/conf.d
       mariadb:
         image: mariadb:10.9
         env:
@@ -103,7 +103,7 @@ jobs:
           MARIADB_DATABASE: nocobase
         options: --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes: 
-          - ${{ github.workspace }}/mysql/my.conf:/etc/mysql/conf.d/my.conf
+          - ${{ github.workspace }}/mariadb:/etc/mysql/conf.d
       postgres:
         image: postgres:11
         env:
