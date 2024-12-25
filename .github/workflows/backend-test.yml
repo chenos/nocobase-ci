@@ -189,10 +189,10 @@ jobs:
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
-          DB_USER: ${{ matrix.db_user }} 
+          DB_USER: ${{ matrix.db.db_user }} 
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
-          DB_SCHEMA: ${{ matrix.db_schema }}
-          COLLECTION_MANAGER_SCHEMA: ${{ matrix.collection_manager_schema }}
+          DB_SCHEMA: ${{ matrix.db.db_schema }}
+          COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
 
