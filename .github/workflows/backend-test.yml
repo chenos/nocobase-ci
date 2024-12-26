@@ -68,6 +68,11 @@ jobs:
             host: postgres
             port: 5432
             db_user: postgres
+            cache_redis: redis://redis:6379/2
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
             db_schema: nocobase
           - dialect: postgres
             host: postgres
@@ -81,6 +86,13 @@ jobs:
             db_schema: nocobase
             collection_manager_schema: user_schema
         underscored: [true, false]
+        exclude:
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
+            cache_redis: redis://redis:6379/2
+            underscored: false
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
     services:
@@ -235,6 +247,8 @@ jobs:
           DB_SCHEMA: ${{ matrix.db.db_schema }}
           COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
           LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
+          PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
+          CACHE_REDIS_URL: ${{ matrix.db.cache_redis }}
   update-success:
     if: ${{ always() && inputs.checkRunId }}
     needs: backend-test
