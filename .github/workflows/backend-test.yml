@@ -87,12 +87,13 @@ jobs:
             collection_manager_schema: user_schema
         underscored: [true, false]
         exclude:
-          - dialect: postgres
-            host: postgres
-            port: 5432
-            db_user: postgres
-            cache_redis: redis://redis:6379/2
-            underscored: false
+          - db:
+            - dialect: postgres
+              host: postgres
+              port: 5432
+              db_user: postgres
+              cache_redis: redis://redis:6379/2
+              underscored: false
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
     services:
