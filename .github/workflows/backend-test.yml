@@ -229,7 +229,7 @@ jobs:
         run: yarn install
       - name: Run test
         run: |
-          yarn test --server packages/pro-plugins/@nocobase --bail=2 
+          yarn test --server packages/pro-plugins/@nocobase 
         env:
           LOGGER_LEVEL: error
           ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
