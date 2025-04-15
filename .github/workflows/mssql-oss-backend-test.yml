@@ -1,0 +1,161 @@
+name: NocoBase mssql oss backend test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.repository }}-${{ inputs.branch }}-${{ inputs.nocobase_pr_number }}-${{ inputs.pro_pr_number }}
+  cancel-in-progress: true
+
+run-name: ${{ inputs.repository }}-${{ inputs.branch }}-${{ inputs.nocobase_pr_number }}-${{ inputs.pro_pr_number }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'base branch'
+        required: true
+      nocobase_pr_number:
+        description: 'main repo pr number'
+      pro_pr_number:
+        description: 'pro repo pr number'
+      repository:
+        description: 'repository'
+      checkRunId:
+        description: 'check run id'
+
+jobs:
+  update-in-progress:
+    if: ${{ inputs.checkRunId }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase,${{ inputs.repository }}
+          skip-token-revoke: true
+      - name: Update in_progress status
+        run: |
+          gh api -X PATCH /repos/nocobase/${{ inputs.repository }}/check-runs/${{ inputs.checkRunId }} \
+             -F 'status=in_progress' \
+             -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
+        env: 
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+  mssql-test:
+    strategy:
+      matrix:
+        node_version: ['20']
+        underscored: [true, false]
+    runs-on: ubuntu-latest
+    container: node:${{ matrix.node_version }}
+    services:
+      # Label used to access the service container
+      mssql:
+        # Docker Hub image
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        # Provide the password for postgres
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: password 
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd "/opt/mssql-tools/bin/sqlcmd -U sa -P $MSSQL_SA_PASSWORD -Q 'CREATE DATABASE nocobase' -b -o /dev/null"
+          --health-interval 60s
+          --health-timeout 30s
+          --health-start-period 20s
+          --health-retries 3
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase,pro-plugins
+          skip-token-revoke: true
+      - name: Install the gh cli
+        uses: ksivamuthu/actions-setup-gh-cli@v3
+        with:
+         version: 2.64.0
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: nocobase/nocobase
+          ref: ${{ inputs.branch }}
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: true
+      - name: Checkout nocobase/nocobase pr
+        if: ${{ inputs.nocobase_pr_number != '' }}
+        shell: bash
+        run: |
+          gh pr checkout ${{ inputs.nocobase_pr_number }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Checkout mssql plugin
+        uses: actions/checkout@v3
+        with:
+          repository: nocobase/pro-plugins
+          ref: ${{ inputs.branch }}
+          path: packages/pro-plugins
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Checkout pro pr
+        if: ${{ inputs.pro_pr_number != '' }}
+        shell: bash
+        run: |
+          cd ./packages/pro-plugins
+          gh pr checkout ${{ inputs.pro_pr_number }}
+          cd ../../
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Use Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: 'yarn'
+      - name: Install project dependencies
+        run: yarn install
+      - name: Test with mssql
+        run: |
+          ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
+          sleep 1
+          yarn test --server --single-thread=false
+        env:
+          LOGGER_LEVEL: error
+          DB_DIALECT: mssql
+          DB_HOST: mssql
+          DB_PORT: 1433
+          DB_USER: sa
+          DB_PASSWORD: password
+          DB_DATABASE: nocobase
+          DB_UNDERSCORED: ${{ matrix.underscored }}
+          DB_SCHEMA: ${{ matrix.schema }}
+          DB_TEST_DISTRIBUTOR_PORT: 23450
+          DB_TEST_PREFIX: test
+          ENCRYPTION_FIELD_KEY: 1%&glK;<UA}aIxJVc53-4G(rTi0vg@J]
+    timeout-minutes: 60
+  update-success:
+    if: ${{ always() && inputs.checkRunId }}
+    needs: backend-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase,pro-plugins
+          skip-token-revoke: true
+      - name: Update success status
+        run: |
+          gh api -X PATCH /repos/nocobase/${{ inputs.repository }}/check-runs/${{ inputs.checkRunId }} \
+             -F 'status=completed' \
+             -F 'conclusion=${{ needs.backend-test.result }}' \
+             -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
+        env: 
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+
+

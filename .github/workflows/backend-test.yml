@@ -1,4 +1,4 @@
-name: NocoBase backend test
+name: NocoBase pro backend test
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.branch }}-${{ inputs.nocobase_pr_number }}-${{ inputs.pro_repo }}-${{ inputs.pro_pr_number }}
