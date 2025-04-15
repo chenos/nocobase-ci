@@ -70,7 +70,7 @@ jobs:
         if: failure()
         uses: docker://docker
         with:
-          args: docker logs $(docker ps -aqf "name=mssql")
+          args: docker logs mssql
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
