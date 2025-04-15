@@ -57,7 +57,7 @@ jobs:
         # Provide the password for postgres
         env:
           ACCEPT_EULA: Y
-          MSSQL_SA_PASSWORD: password 
+          MSSQL_SA_PASSWORD: yourStrong(!)Password
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd "/opt/mssql-tools/bin/sqlcmd -U sa -P $MSSQL_SA_PASSWORD -Q 'CREATE DATABASE nocobase' -b -o /dev/null"
@@ -127,7 +127,7 @@ jobs:
           DB_HOST: mssql
           DB_PORT: 1433
           DB_USER: sa
-          DB_PASSWORD: password
+          DB_PASSWORD: yourStrong(!)Password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
           DB_SCHEMA: ${{ matrix.schema }}
