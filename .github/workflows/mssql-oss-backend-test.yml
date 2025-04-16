@@ -120,10 +120,10 @@ jobs:
         run: yarn install
       - name: Test with mssql
         run: |
-          # yarn test --server
-          ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
-          sleep 1
-          yarn test --server --single-thread=false
+          yarn test --server
+          # ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
+          # sleep 1
+          # yarn test --server --single-thread=false
         env:
           LOGGER_LEVEL: error
           DB_DIALECT: mssql
