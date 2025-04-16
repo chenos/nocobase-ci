@@ -162,6 +162,7 @@ jobs:
           DB_STORAGE: /tmp/db.sqlite
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
+          DB_TEST_PREFIX: test_
       - name: Run test
         if: ${{ matrix.db.dialect != 'sqlite' }}
         run: |
