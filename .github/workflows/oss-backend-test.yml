@@ -4,6 +4,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ inputs.branch }}-${{ inputs.pr_number }}
   cancel-in-progress: true
 
+run-name: ${{ inputs.branch }}-${{ inputs.pr_number }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -136,10 +138,10 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           submodules: true
       - name: Checkout nocobase/nocobase pr
-        if: ${{ inputs.nocobase_pr_number != '' }}
+        if: ${{ inputs.pr_number != '' }}
         shell: bash
         run: |
-          gh pr checkout ${{ inputs.nocobase_pr_number }}
+          gh pr checkout ${{ inputs.pr_number }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Use Node.js ${{ matrix.node_version }}
@@ -150,7 +152,7 @@ jobs:
       - name: Install project dependencies
         run: yarn install
       - name: Run sqlite test
-        if: ${{ matrix.db.dialect == "sqlite" }}
+        if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
           yarn test --server --single-thread=false
         env:
@@ -161,7 +163,7 @@ jobs:
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
       - name: Run test
-        if: ${{ matrix.db.dialect != "sqlite" }}
+        if: ${{ matrix.db.dialect != 'sqlite' }}
         run: |
           ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
           sleep 1
