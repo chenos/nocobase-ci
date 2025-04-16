@@ -123,7 +123,7 @@ jobs:
           # yarn test --server
           ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
           sleep 1
-          yarn test packages/core/database/src/__tests__/database.test.ts
+          yarn test packages/core/database
         env:
           LOGGER_LEVEL: debug
           DB_DIALECT: mssql
