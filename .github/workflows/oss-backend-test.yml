@@ -149,7 +149,19 @@ jobs:
           cache: 'yarn'
       - name: Install project dependencies
         run: yarn install
+      - name: Run sqlite test
+        if: ${{ matrix.db.dialect == "sqlite" }}
+        run: |
+          yarn test --server --single-thread=false
+        env:
+          LOGGER_LEVEL: error
+          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
+          DB_DIALECT: ${{ matrix.db.dialect }}
+          DB_STORAGE: /tmp/db.sqlite
+          DB_DATABASE: nocobase
+          DB_UNDERSCORED: ${{ matrix.underscored }}
       - name: Run test
+        if: ${{ matrix.db.dialect != "sqlite" }}
         run: |
           ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
           sleep 1
@@ -160,7 +172,6 @@ jobs:
           DB_DIALECT: ${{ matrix.db.dialect }}
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
-          DB_STORAGE: /tmp/db.sqlite
           DB_USER: ${{ matrix.db.db_user }} 
           DB_PASSWORD: password
           DB_DATABASE: nocobase
