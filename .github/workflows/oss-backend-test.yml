@@ -201,7 +201,7 @@ jobs:
           skip-token-revoke: true
       - name: Update success status
         run: |
-          gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo }}/check-runs/${{ inputs.checkRunId }} \
+          gh api -X PATCH /repos/nocobase/nocobase/check-runs/${{ inputs.checkRunId }} \
              -F 'status=completed' \
              -F 'conclusion=${{ needs.backend-test.result }}' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
