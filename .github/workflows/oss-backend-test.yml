@@ -179,6 +179,8 @@ jobs:
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
           DB_SCHEMA: ${{ matrix.db.db_schema }}
+          DB_TEST_DISTRIBUTOR_PORT: 23450
+          DB_TEST_PREFIX: test_
           COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
           LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
           PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
