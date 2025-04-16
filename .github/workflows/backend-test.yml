@@ -65,11 +65,13 @@ jobs:
             port: 5432
             db_user: postgres
             db_schema: public
+            collection_manager_schema: public
           - dialect: postgres
             host: postgres
             port: 5432
             db_user: postgres
             db_schema: nocobase
+            collection_manager_schema: public
           - dialect: postgres
             host: postgres
             port: 5432

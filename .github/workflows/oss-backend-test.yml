@@ -58,6 +58,7 @@ jobs:
             host: postgres
             port: 5432
             db_user: postgres
+            db_schema: public
             collection_manager_schema: public
           - dialect: postgres
             host: postgres
@@ -69,6 +70,7 @@ jobs:
             host: postgres
             port: 5432
             db_user: postgres
+            db_schema: public
             collection_manager_schema: user_schema
           - dialect: postgres
             host: postgres
