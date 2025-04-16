@@ -66,11 +66,6 @@ jobs:
           --health-start-period 20s
           --health-retries 3
     steps:
-      - name: Debug 
-        if: failure()
-        uses: docker://docker
-        with:
-          args: docker logs mssql
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
@@ -79,6 +74,8 @@ jobs:
           owner: nocobase
           repositories: nocobase,pro-plugins
           skip-token-revoke: true
+      - name: Git safe directory
+        run: git config --global --add safe.directory `pwd`
       - name: Install the gh cli
         uses: ksivamuthu/actions-setup-gh-cli@v3
         with:
