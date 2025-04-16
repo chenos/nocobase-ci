@@ -1,0 +1,194 @@
+name: NocoBase backend test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.branch }}-${{ inputs.pr_number }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'base branch'
+        required: true
+      pr_number:
+        description: 'main repo pr number'
+      checkRunId:
+        description: 'check run id'
+
+jobs:
+  update-in-progress:
+    if: ${{ inputs.checkRunId }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase
+          skip-token-revoke: true
+      - name: Update in_progress status
+        run: |
+          gh api -X PATCH /repos/nocobase/nocobase/check-runs/${{ inputs.checkRunId }} \
+             -F 'status=in_progress' \
+             -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
+        env: 
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+  backend-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        node_version: ['20']
+        db:
+          - dialect: sqlite
+            host: localhost
+            port: ''
+          - dialect: mysql
+            host: mysql
+            port: 3306
+            db_user: root
+          - dialect: mariadb
+            host: mariadb
+            port: 3306
+            db_user: root
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
+            db_schema: nocobase
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
+            collection_manager_schema: user_schema
+          - dialect: postgres
+            host: postgres
+            port: 5432
+            db_user: postgres
+            db_schema: nocobase
+            collection_manager_schema: user_schema
+        underscored: [true, false]
+        include:
+          - node_version: 20
+            underscored: true
+            db:
+            - dialect: postgres
+              host: postgres
+              port: 5432
+              db_user: postgres
+              cache_redis: redis://redis:6379/2
+    runs-on: ubuntu-latest
+    container: node:${{ matrix.node_version }}
+    services:
+      redis:
+        image: redis/redis-stack-server:latest
+        ports:
+          - 6379:6379
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: nocobase
+        options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+      mariadb:
+        image: mariadb:10.9
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: nocobase
+        options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+      postgres:
+        image: postgres:11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: nocobase
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase
+          skip-token-revoke: true
+      - name: Git safe directory
+        run: git config --global --add safe.directory `pwd`
+      - name: Install the gh cli
+        uses: ksivamuthu/actions-setup-gh-cli@v3
+        with:
+         version: 2.64.0
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: nocobase/nocobase
+          ref: ${{ inputs.branch }}
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: true
+      - name: Checkout nocobase/nocobase pr
+        if: ${{ inputs.nocobase_pr_number != '' }}
+        shell: bash
+        run: |
+          gh pr checkout ${{ inputs.nocobase_pr_number }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Use Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: 'yarn'
+      - name: Install project dependencies
+        run: yarn install
+      - name: Run test
+        run: |
+          ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
+          sleep 1
+          yarn test --server --single-thread=false
+        env:
+          LOGGER_LEVEL: error
+          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
+          DB_DIALECT: ${{ matrix.db.dialect }}
+          DB_HOST: ${{ matrix.db.host }}
+          DB_PORT: ${{ matrix.db.port }}
+          DB_STORAGE: /tmp/db.sqlite
+          DB_USER: ${{ matrix.db.db_user }} 
+          DB_PASSWORD: password
+          DB_DATABASE: nocobase
+          DB_UNDERSCORED: ${{ matrix.underscored }}
+          DB_SCHEMA: ${{ matrix.db.db_schema }}
+          COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
+          LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
+          PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
+          CACHE_REDIS_URL: ${{ matrix.db.cache_redis }}
+  update-success:
+    if: ${{ always() && inputs.checkRunId }}
+    needs: backend-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase,pro-plugins,${{ inputs.pro_repo }}
+          skip-token-revoke: true
+      - name: Update success status
+        run: |
+          gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo }}/check-runs/${{ inputs.checkRunId }} \
+             -F 'status=completed' \
+             -F 'conclusion=${{ needs.backend-test.result }}' \
+             -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
+        env: 
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
