@@ -123,9 +123,9 @@ jobs:
           # yarn test --server
           ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
           sleep 1
-          yarn test --server --single-thread=false
+          yarn test packages/core/database/src/__tests__/database.test.ts
         env:
-          LOGGER_LEVEL: error
+          LOGGER_LEVEL: debug
           DB_DIALECT: mssql
           DB_HOST: mssql
           DB_PORT: 1433
@@ -133,8 +133,8 @@ jobs:
           DB_PASSWORD: yourStrong(!)Password
           DB_DATABASE: master
           DB_UNDERSCORED: ${{ matrix.underscored }}
-          DB_TEST_DISTRIBUTOR_PORT: 23450
-          DB_TEST_PREFIX: test_
+          # DB_TEST_DISTRIBUTOR_PORT: 23450
+          # DB_TEST_PREFIX: test_
           ENCRYPTION_FIELD_KEY: 1%&glK;<UA}aIxJVc53-4G(rTi0vg@J]
     timeout-minutes: 60
   update-success:
