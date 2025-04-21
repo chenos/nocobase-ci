@@ -154,7 +154,9 @@ jobs:
           node-version: ${{ matrix.node_version }}
           cache: 'yarn'
       - name: Install project dependencies
-        run: yarn install
+        run: |
+          yarn install
+          yarn add sqlite3 --no-save -W
       - name: Run sqlite test
         if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
