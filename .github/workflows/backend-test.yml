@@ -89,7 +89,7 @@ jobs:
           - node_version: 20
             underscored: true
             db:
-            - dialect: postgres
+              dialect: postgres
               host: postgres
               port: 5432
               db_user: postgres
