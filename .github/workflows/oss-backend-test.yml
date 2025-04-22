@@ -88,6 +88,8 @@ jobs:
               port: 5432
               db_user: postgres
               cache_redis: redis://redis:6379/2
+              db_schema: public
+              collection_manager_schema: public
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
     services:
