@@ -231,6 +231,9 @@ jobs:
           cache: 'yarn'
       - name: Install project dependencies
         run: yarn install
+      - name: yarn add sqlite3
+        if: ${{ matrix.db.dialect == 'sqlite' }}
+        run: yarn add sqlite3 --no-save -W
       - name: Run test
         run: |
           yarn test --server packages/pro-plugins/@nocobase 
