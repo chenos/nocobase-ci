@@ -253,6 +253,7 @@ jobs:
           LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
           PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
           CACHE_REDIS_URL: ${{ matrix.db.cache_redis }}
+          QUEUE_ADAPTER_REDIS_URL: redis://redis:6379/3
   update-success:
     if: ${{ always() && inputs.checkRunId }}
     needs: backend-test
