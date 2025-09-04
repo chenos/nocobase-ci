@@ -10,18 +10,18 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'base branch'
+        description: "base branch"
         required: true
       nocobase_pr_number:
-        description: 'main repo pr number'
+        description: "main repo pr number"
       pro_repo:
-        description: 'pro repository name'
-        default: 'pro-plugins'
+        description: "pro repository name"
+        default: "pro-plugins"
         required: true
       pro_pr_number:
-        description: 'pro repo pr number'
+        description: "pro repo pr number"
       checkRunId:
-        description: 'check run id'
+        description: "check run id"
 
 jobs:
   update-in-progress:
@@ -41,17 +41,17 @@ jobs:
           gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo }}/check-runs/${{ inputs.checkRunId }} \
              -F 'status=in_progress' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
-        env: 
+        env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
   backend-test:
     strategy:
       fail-fast: false
       matrix:
-        node_version: ['20']
+        node_version: ["20"]
         db:
           - dialect: sqlite
             host: localhost
-            port: ''
+            port: ""
           - dialect: mysql
             host: mysql
             port: 3306
@@ -107,7 +107,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
           MYSQL_DATABASE: nocobase
         options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
-        volumes: 
+        volumes:
           - ${{ github.workspace }}/mysql:/etc/mysql/conf.d
       mariadb:
         image: mariadb:10.9
@@ -115,7 +115,7 @@ jobs:
           MARIADB_ROOT_PASSWORD: password
           MARIADB_DATABASE: nocobase
         options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
-        volumes: 
+        volumes:
           - ${{ github.workspace }}/mariadb:/etc/mysql/conf.d
       postgres:
         image: postgres:11
@@ -173,7 +173,7 @@ jobs:
       - name: Install the gh cli
         uses: ksivamuthu/actions-setup-gh-cli@v3
         with:
-         version: 2.64.0
+          version: 2.64.0
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -228,7 +228,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node_version }}
-          cache: 'yarn'
+          cache: "yarn"
       - name: Install project dependencies
         run: yarn install
       - name: yarn add sqlite3
@@ -236,20 +236,21 @@ jobs:
         run: yarn add sqlite3 --no-save -W
       - name: Run test
         run: |
-          yarn test --server packages/pro-plugins/@nocobase 
+          yarn test --server packages/pro-plugins/@nocobase
         env:
           LOGGER_LEVEL: error
-          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
+          ENCRYPTION_FIELD_KEY: "66036232662082160067048057423456"
           DB_DIALECT: ${{ matrix.db.dialect }}
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
           DB_STORAGE: /tmp/db.sqlite
-          DB_USER: ${{ matrix.db.db_user }} 
+          DB_USER: ${{ matrix.db.db_user }}
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
           DB_SCHEMA: ${{ matrix.db.db_schema }}
           COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
+          REDIS_URL: redis://redis:6379/0
           LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
           PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
           CACHE_REDIS_URL: ${{ matrix.db.cache_redis }}
@@ -273,6 +274,5 @@ jobs:
              -F 'status=completed' \
              -F 'conclusion=${{ needs.backend-test.result }}' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
-        env: 
+        env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-

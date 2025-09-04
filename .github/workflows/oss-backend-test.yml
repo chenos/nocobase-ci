@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'base branch'
+        description: "base branch"
         required: true
       pr_number:
-        description: 'main repo pr number'
+        description: "main repo pr number"
       checkRunId:
-        description: 'check run id'
+        description: "check run id"
 
 jobs:
   update-in-progress:
@@ -35,17 +35,17 @@ jobs:
           gh api -X PATCH /repos/nocobase/nocobase/check-runs/${{ inputs.checkRunId }} \
              -F 'status=in_progress' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
-        env: 
+        env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
   backend-test:
     strategy:
       fail-fast: false
       matrix:
-        node_version: ['20']
+        node_version: ["20"]
         db:
           - dialect: sqlite
             host: localhost
-            port: ''
+            port: ""
           - dialect: mysql
             host: mysql
             port: 3306
@@ -135,7 +135,7 @@ jobs:
       - name: Install the gh cli
         uses: ksivamuthu/actions-setup-gh-cli@v3
         with:
-         version: 2.64.0
+          version: 2.64.0
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -154,7 +154,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node_version }}
-          cache: 'yarn'
+          cache: "yarn"
       - name: Install project dependencies
         run: |
           yarn install
@@ -165,7 +165,7 @@ jobs:
           yarn test --server --single-thread=false
         env:
           LOGGER_LEVEL: error
-          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
+          ENCRYPTION_FIELD_KEY: "66036232662082160067048057423456"
           DB_DIALECT: ${{ matrix.db.dialect }}
           DB_STORAGE: /tmp/db.sqlite
           DB_DATABASE: nocobase
@@ -179,11 +179,11 @@ jobs:
           yarn test --server --single-thread=false
         env:
           LOGGER_LEVEL: error
-          ENCRYPTION_FIELD_KEY: '66036232662082160067048057423456'
+          ENCRYPTION_FIELD_KEY: "66036232662082160067048057423456"
           DB_DIALECT: ${{ matrix.db.dialect }}
           DB_HOST: ${{ matrix.db.host }}
           DB_PORT: ${{ matrix.db.port }}
-          DB_USER: ${{ matrix.db.db_user }} 
+          DB_USER: ${{ matrix.db.db_user }}
           DB_PASSWORD: password
           DB_DATABASE: nocobase
           DB_UNDERSCORED: ${{ matrix.underscored }}
@@ -191,9 +191,11 @@ jobs:
           DB_TEST_DISTRIBUTOR_PORT: 23450
           DB_TEST_PREFIX: test_
           COLLECTION_MANAGER_SCHEMA: ${{ matrix.db.collection_manager_schema }}
+          REDIS_URL: redis://redis:6379/0
           LOCK_ADAPTER_REDIS_URL: redis://redis:6379/0
           PUBSUB_ADAPTER_REDIS_URL: redis://redis:6379/1
           CACHE_REDIS_URL: ${{ matrix.db.cache_redis }}
+          QUEUE_ADAPTER_REDIS_URL: redis://redis:6379/3
   update-success:
     if: ${{ always() && inputs.checkRunId }}
     needs: backend-test
@@ -213,6 +215,5 @@ jobs:
              -F 'status=completed' \
              -F 'conclusion=${{ needs.backend-test.result }}' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
-        env: 
+        env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
