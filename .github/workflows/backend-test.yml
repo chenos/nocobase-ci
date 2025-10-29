@@ -233,16 +233,10 @@ jobs:
         with:
           node-version: ${{ matrix.node_version }}
           cache: "yarn"
-      - name: Install pg_dump
-        if: ${{ startsWith(matrix.db.dialect, 'postgres') }}
+      - name: Install db clients
         run: |
           apt-get update
-          apt-get install -y postgresql-client
-      - name: Install mysql client
-        if: ${{ matrix.db.dialect == 'mysql' || matrix.db.dialect == 'mariadb' }}
-        run: |
-          apt-get update
-          apt-get install -y default-mysql-client
+          apt-get install -y postgresql-client default-mysql-client
       - name: Install project dependencies
         run: yarn install
       - name: yarn add sqlite3
