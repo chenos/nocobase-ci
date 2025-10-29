@@ -195,7 +195,7 @@ jobs:
           app-id: ${{ vars.NOCOBASE_APP_ID }}
           private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
           owner: nocobase
-          repositories: nocobase,pro-plugins,${{ inputs.repository }},${{ join(fromJSON(needs.get-plugins.outputs.all-plugins), ',') }}
+          repositories: nocobase,pro-plugins,${{ inputs.pro_repo }},${{ join(fromJSON(needs.get-plugins.outputs.all-plugins), ',') }}
           skip-token-revoke: true
       - name: Install GitHub CLI
         run: |
@@ -212,7 +212,7 @@ jobs:
       - name: Update in_progress status
         if: ${{ inputs.checkRunId }}
         run: |
-          gh api -X PATCH /repos/nocobase/${{ inputs.repository || 'nocobase' }}/check-runs/${{ inputs.checkRunId }} \
+          gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo || 'nocobase' }}/check-runs/${{ inputs.checkRunId }} \
              -F 'status=in_progress' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
         env:
@@ -253,7 +253,7 @@ jobs:
           git checkout ${{ steps.get-branch.outputs.baseBranch }} || true
           cd ../../
       - name: Checkout pro-plugins pr
-        if: ${{ inputs.repository == 'pro-plugins' && inputs.pro_pr_number != '' }}
+        if: ${{ inputs.pro_repo == 'pro-plugins' && inputs.pro_pr_number != '' }}
         shell: bash
         run: |
           cd ./packages/pro-plugins/
@@ -272,8 +272,8 @@ jobs:
         shell: bash
         if: ${{ inputs.pro_plugin && inputs.pro_plugin != 'pro-plugins' }}
         run: |
-          if [ ! -d "packages/pro-plugins/@nocobase/${{ inputs.repository }}" ]; then
-            git clone -b ${{ inputs.branch }} https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/${{ inputs.repository }}.git packages/pro-plugins/@nocobase/${{ inputs.repository }}
+          if [ ! -d "packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}" ]; then
+            git clone -b ${{ inputs.branch }} https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/${{ inputs.pro_repo }}.git packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
           fi
       - name: Try checkout pro repos branch
         shell: bash
@@ -290,7 +290,7 @@ jobs:
         if: ${{ inputs.pro_plugin && inputs.pro_plugin != 'pro-plugins' && inputs.pro_pr_number != '' }}
         shell: bash
         run: |
-          cd ./packages/pro-plugins/@nocobase/${{ inputs.repository }}
+          cd ./packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
           gh pr checkout ${{ inputs.pro_pr_number }}
           cd ../../../../
         env:
