@@ -179,10 +179,10 @@ jobs:
             echo "proRepos=$(echo '${{ needs.get-plugins.outputs.rc-plugins }}')" >> $GITHUB_OUTPUT
           fi
           if [ -n "${{ inputs.pro_pr_number }}" ]; then
-            if [[ "${{ inputs.pro_plugin }}" == "pro-plugins" ]]; then
+            if [[ "${{ inputs.pro_repo }}" == "pro-plugins" ]]; then
               echo "imageTag=$(echo 'pr-${{ inputs.pro_pr_number }}-pro')" >> $GITHUB_OUTPUT
             else 
-              echo "imageTag=$(echo 'pr-${{ inputs.pro_pr_number }}-${{ inputs.pro_plugin }}')" >> $GITHUB_OUTPUT
+              echo "imageTag=$(echo 'pr-${{ inputs.pro_pr_number }}-${{ inputs.pro_repo }}')" >> $GITHUB_OUTPUT
             fi
           elif [ -n "${{ inputs.nocobase_pr_number }}" ]; then
             echo "imageTag=$(echo 'pr-${{ inputs.nocobase_pr_number }}')" >> $GITHUB_OUTPUT
@@ -270,7 +270,7 @@ jobs:
           done
       - name: Clone pro repo
         shell: bash
-        if: ${{ inputs.pro_plugin && inputs.pro_plugin != 'pro-plugins' }}
+        if: ${{ inputs.pro_repo && inputs.pro_repo != 'pro-plugins' }}
         run: |
           if [ ! -d "packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}" ]; then
             git clone -b ${{ inputs.branch }} https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/${{ inputs.pro_repo }}.git packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
@@ -287,7 +287,7 @@ jobs:
             cd ../../../../
           done
       - name: Checkout pro pr
-        if: ${{ inputs.pro_plugin && inputs.pro_plugin != 'pro-plugins' && inputs.pro_pr_number != '' }}
+        if: ${{ inputs.pro_repo && inputs.pro_repo != 'pro-plugins' && inputs.pro_pr_number != '' }}
         shell: bash
         run: |
           cd ./packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
