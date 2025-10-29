@@ -197,6 +197,7 @@ jobs:
           owner: nocobase
           repositories: nocobase,pro-plugins,${{ inputs.repository }},${{ join(fromJSON(needs.get-plugins.outputs.all-plugins), ',') }}
           skip-token-revoke: true
+      - uses: actions/setup-gh-cli@v2
       - name: Update in_progress status
         if: ${{ inputs.checkRunId }}
         run: |
