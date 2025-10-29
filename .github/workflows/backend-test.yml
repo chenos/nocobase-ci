@@ -212,7 +212,7 @@ jobs:
       - name: Update in_progress status
         if: ${{ inputs.checkRunId }}
         run: |
-          gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo || 'nocobase' }}/check-runs/${{ inputs.checkRunId }} \
+          gh api -X PATCH /repos/nocobase/${{ inputs.pro_repo }}/check-runs/${{ inputs.checkRunId }} \
              -F 'status=in_progress' \
              -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
         env:
@@ -311,7 +311,15 @@ jobs:
         run: yarn add sqlite3 --no-save -W
       - name: Run test
         run: |
-          yarn test --server packages/pro-plugins/@nocobase
+          test_path="packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}"
+          if [ "${{ inputs.pro_repo }}" = "pro-plugins" ]; then
+            test_path="packages/pro-plugins"
+          fi
+          if [ ! -d "$test_path" ]; then
+            echo "Test directory $test_path not found"
+            exit 1
+          fi
+          yarn test --server "$test_path"
         env:
           LOGGER_LEVEL: error
           ENCRYPTION_FIELD_KEY: "66036232662082160067048057423456"
