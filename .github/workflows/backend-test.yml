@@ -48,6 +48,7 @@ jobs:
     secrets: 
       NOCOBASE_APP_PRIVATE_KEY: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
   backend-test:
+    needs: get-plugins
     strategy:
       fail-fast: false
       matrix:
@@ -201,8 +202,8 @@ jobs:
         run: |
           gh api -X PATCH /repos/nocobase/${{ inputs.repository || 'nocobase' }}/check-runs/${{ inputs.checkRunId }} \
              -F 'status=in_progress' \
-             -F 'details_url=https://github.com/2013xile/nocobase-ci/actions/runs/${{ github.run_id }}'
-        env: 
+             -F 'details_url=https://github.com/chenos/nocobase-ci/actions/runs/${{ github.run_id }}'
+        env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Checkout
         uses: actions/checkout@v3
