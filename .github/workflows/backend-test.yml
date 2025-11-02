@@ -61,7 +61,7 @@ jobs:
             host: mysql
             port: 3306
             db_user: root
-            client_package: "mysql-client-8.0"
+            client_package: "mysql-client"
           - dialect: mariadb
             host: mariadb
             port: 3306
