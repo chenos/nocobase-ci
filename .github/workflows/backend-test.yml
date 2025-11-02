@@ -61,34 +61,40 @@ jobs:
             host: mysql
             port: 3306
             db_user: root
+            client_package: "mysql-client-8.0"
           - dialect: mariadb
             host: mariadb
             port: 3306
             db_user: root
+            client_package: "mariadb-client"
           - dialect: postgres
             host: postgres
             port: 5432
             db_user: postgres
             db_schema: public
             collection_manager_schema: public
+            client_package: "postgresql-client"
           - dialect: postgres
             host: postgres
             port: 5432
             db_user: postgres
             db_schema: nocobase
             collection_manager_schema: public
+            client_package: "postgresql-client"
           - dialect: postgres
             host: postgres
             port: 5432
             db_user: postgres
             db_schema: public
             collection_manager_schema: user_schema
+            client_package: "postgresql-client"
           - dialect: postgres
             host: postgres
             port: 5432
             db_user: postgres
             db_schema: nocobase
             collection_manager_schema: user_schema
+            client_package: "postgresql-client"
         underscored: [true, false]
         include:
           - node_version: 20
@@ -301,9 +307,10 @@ jobs:
           node-version: ${{ matrix.node_version }}
           cache: "yarn"
       - name: Install db clients
+        if: ${{ matrix.db.client_package }}
         run: |
           apt-get update
-          apt-get install -y postgresql-client default-mysql-client
+          apt-get install -y ${{ matrix.db.client_package || '' }}
       - name: Install project dependencies
         run: yarn install
       - name: yarn add sqlite3
