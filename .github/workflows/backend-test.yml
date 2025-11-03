@@ -104,6 +104,7 @@ jobs:
               host: postgres
               port: 5432
               db_user: postgres
+              client_package: "postgresql-client"
               cache_redis: redis://redis:6379/2
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
