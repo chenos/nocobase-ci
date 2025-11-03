@@ -61,7 +61,7 @@ jobs:
             host: mysql
             port: 3306
             db_user: root
-            client_package: "default-mysql-client"
+            client_package: "mysql-client"
           - dialect: mariadb
             host: mariadb
             port: 3306
@@ -206,16 +206,16 @@ jobs:
           skip-token-revoke: true
       - name: Install GitHub CLI
         run: |
-          apt-get update
-          apt-get install -y curl gnupg
+          apt update
+          apt install -y curl gnupg
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
             | tee /usr/share/keyrings/githubcli-archive-keyring.gpg >/dev/null
           chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
             https://cli.github.com/packages stable main" \
             | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-          apt-get update
-          apt-get install -y gh
+          apt update
+          apt install -y gh
       - name: Update in_progress status
         if: ${{ inputs.checkRunId }}
         run: |
@@ -310,8 +310,8 @@ jobs:
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
-          apt-get update
-          apt-get install -y ${{ matrix.db.client_package || '' }}
+          apt update
+          apt install -y ${{ matrix.db.client_package || '' }}
       - name: Echo mysql client version
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: mysqldump --version
