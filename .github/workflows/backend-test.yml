@@ -207,7 +207,7 @@ jobs:
       - name: Install GitHub CLI
         run: |
           apt update
-          apt install -y curl gnupg
+          apt install -y curl gnupg wget
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
             | tee /usr/share/keyrings/githubcli-archive-keyring.gpg >/dev/null
           chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -227,8 +227,8 @@ jobs:
       - name: Install mysql client
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: |
-          curl -O https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-plugins_8.0.39-1debian12_amd64.deb
-          curl -O https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb
+          wget https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-plugins_8.0.39-1debian12_amd64.deb
+          wget https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb
           dpkg -i mysql-community-client-plugins_8.0.39-1debian12_amd64.deb
           dpkg -i mysql-community-client-core_8.0.39-1debian12_amd64.deb
       - name: Install db clients
