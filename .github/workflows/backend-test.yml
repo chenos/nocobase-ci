@@ -310,7 +310,6 @@ jobs:
       - name: Set mysql client repo
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: |
-          set -euo pipefail
           apt update
           apt install -y gnupg wget lsb-release
           temp_keyring=$(mktemp)
