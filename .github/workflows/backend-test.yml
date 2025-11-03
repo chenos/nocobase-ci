@@ -317,6 +317,8 @@ jobs:
           # 配置 APT，使其知道 Oracle MySQL 仓库的位置，并选择 8.0 版本。
           echo 'mysql-apt-config mysql-apt-config/select-server select mysql-8.0' | debconf-set-selections
           DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config.deb
+          echo "Attempting to retrieve and update the expired MySQL GPG key..."
+          wget -O /etc/apt/trusted.gpg.d/mysql.gpg https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
