@@ -229,7 +229,7 @@ jobs:
         run: |
           apt update
           apt install -y lsb-release
-          curl -L https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb | dpkg -i -
+          curl https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb > mysql-community-client-core_8.0.39-1debian12_amd64.deb && dpkg -i mysql-community-client-core_8.0.39-1debian12_amd64.deb
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
