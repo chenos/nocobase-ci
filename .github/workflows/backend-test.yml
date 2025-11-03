@@ -307,6 +307,15 @@ jobs:
         with:
           node-version: ${{ matrix.node_version }}
           cache: "yarn"
+      - name: Set mysql client repo
+        if: ${{ matrix.db.dialect == 'mysql' }}
+        run: |
+          # 1. 下载 Oracle MySQL APT 配置工具
+          wget https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb -O mysql-apt-config.deb
+          # 2. 静默安装配置工具
+          # 配置 APT，使其知道 Oracle MySQL 仓库的位置，并选择 8.0 版本。
+          echo 'mysql-apt-config mysql-apt-config/select-server select mysql-8.0' | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config.deb
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
