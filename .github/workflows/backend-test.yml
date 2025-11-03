@@ -310,15 +310,22 @@ jobs:
       - name: Set mysql client repo
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: |
-          apt install -y lsb-release
-          # 1. 下载 Oracle MySQL APT 配置工具
-          wget https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb -O mysql-apt-config.deb
-          # 2. 静默安装配置工具
-          # 配置 APT，使其知道 Oracle MySQL 仓库的位置，并选择 8.0 版本。
-          echo 'mysql-apt-config mysql-apt-config/select-server select mysql-8.0' | debconf-set-selections
-          DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config.deb
-          echo "Attempting to retrieve and update the expired MySQL GPG key..."
-          wget -O /etc/apt/trusted.gpg.d/mysql.gpg https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+          set -euo pipefail
+          apt update
+          apt install -y gnupg wget lsb-release
+          temp_keyring=$(mktemp)
+          # 使用新的 MySQL GPG 密钥并保存为 dearmored keyring，避免过期密钥问题
+          wget -qO - https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 \
+            | gpg --dearmor > "$temp_keyring"
+          install -o root -g root -m 0644 "$temp_keyring" /usr/share/keyrings/mysql-archive-keyring.gpg
+          rm -f "$temp_keyring"
+          # 直接配置 MySQL 官方 APT 源，显式绑定新的密钥
+          codename=$(lsb_release -sc)
+          cat <<EOF >/etc/apt/sources.list.d/mysql.list
+          deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mysql-archive-keyring.gpg] http://repo.mysql.com/apt/debian $codename mysql-8.0
+          deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mysql-archive-keyring.gpg] http://repo.mysql.com/apt/debian $codename mysql-tools
+          deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mysql-archive-keyring.gpg] http://repo.mysql.com/apt/debian $codename mysql-tools-preview
+          EOF
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
