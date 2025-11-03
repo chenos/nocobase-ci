@@ -310,6 +310,7 @@ jobs:
       - name: Set mysql client repo
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: |
+          apt install -y lsb-release
           # 1. 下载 Oracle MySQL APT 配置工具
           wget https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb -O mysql-apt-config.deb
           # 2. 静默安装配置工具
