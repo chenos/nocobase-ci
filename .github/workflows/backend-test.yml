@@ -227,9 +227,10 @@ jobs:
       - name: Install mysql client
         if: ${{ matrix.db.dialect == 'mysql' }}
         run: |
-          apt update
-          apt install -y lsb-release
-          curl https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb > mysql-community-client-core_8.0.39-1debian12_amd64.deb && dpkg -i mysql-community-client-core_8.0.39-1debian12_amd64.deb
+          curl -O https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-plugins_8.0.39-1debian12_amd64.deb
+          curl -O https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.39-1debian12_amd64.deb
+          dpkg -i mysql-community-client-plugins_8.0.39-1debian12_amd64.deb
+          dpkg -i mysql-community-client-core_8.0.39-1debian12_amd64.deb
       - name: Install db clients
         if: ${{ matrix.db.client_package }}
         run: |
