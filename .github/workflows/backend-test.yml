@@ -312,6 +312,9 @@ jobs:
         run: |
           apt-get update
           apt-get install -y ${{ matrix.db.client_package || '' }}
+      - name: Echo mysql client version
+        if: ${{ matrix.db.dialect == 'mysql' }}
+        run: mysqldump --version
       - name: Install project dependencies
         run: yarn install
       - name: yarn add sqlite3
