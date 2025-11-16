@@ -216,6 +216,7 @@ jobs:
             | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
           apt update
           apt install -y gh
+          git config --global --add safe.directory /__w/nocobase-ci/nocobase-ci
       - name: Update in_progress status
         if: ${{ inputs.checkRunId }}
         run: |
