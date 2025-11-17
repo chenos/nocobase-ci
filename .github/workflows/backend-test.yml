@@ -45,7 +45,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
   get-plugins:
     uses: nocobase/nocobase/.github/workflows/get-plugins.yml@main
-    secrets: 
+    secrets:
       NOCOBASE_APP_PRIVATE_KEY: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
   backend-test:
     needs: get-plugins
@@ -258,7 +258,7 @@ jobs:
         id: get-branch
         shell: bash
         run: |
-            echo "baseBranch=$(git branch --show-current)" >> $GITHUB_OUTPUT
+          echo "baseBranch=$(git branch --show-current)" >> $GITHUB_OUTPUT
       - name: Checkout pro-plugins
         uses: actions/checkout@v3
         with:
@@ -332,7 +332,7 @@ jobs:
         run: |
           test_path="packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}"
           if [ "${{ inputs.pro_repo }}" = "pro-plugins" ]; then
-            test_path="packages/pro-plugins"
+            test_path="packages/pro-plugins/@nocobase"
           fi
           if [ ! -d "$test_path" ]; then
             echo "Test directory $test_path not found"
