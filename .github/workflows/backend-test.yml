@@ -286,6 +286,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Clone pro repos
         shell: bash
+        if: ${{ inputs.pro_repo == 'pro-plugins' }}
         run: |
           for repo in ${{ join(fromJSON(steps.get-info.outputs.proRepos), ' ') }}
           do
