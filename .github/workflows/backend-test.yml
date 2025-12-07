@@ -284,14 +284,6 @@ jobs:
           cd ../../
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      - name: Clone pro repos
-        shell: bash
-        if: ${{ inputs.pro_repo == 'pro-plugins' }}
-        run: |
-          for repo in ${{ join(fromJSON(steps.get-info.outputs.proRepos), ' ') }}
-          do
-          git clone -b ${{ inputs.branch }} https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/$repo.git packages/pro-plugins/@nocobase/$repo
-          done
       - name: Clone pro repo
         shell: bash
         if: ${{ inputs.pro_repo && inputs.pro_repo != 'pro-plugins' }}
