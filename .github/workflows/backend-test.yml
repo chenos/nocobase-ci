@@ -120,7 +120,7 @@ jobs:
           MYSQL_DATABASE: nocobase
         options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes:
-          - ${{ github.workspace }}/mysql:/etc/mysql/conf.d
+          - ${{ github.workspace }}/ci-config/mysql:/etc/mysql/conf.d
       mariadb:
         image: mariadb:10.9
         env:
@@ -128,7 +128,7 @@ jobs:
           MARIADB_DATABASE: nocobase
         options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
         volumes:
-          - ${{ github.workspace }}/mariadb:/etc/mysql/conf.d
+          - ${{ github.workspace }}/ci-config/mariadb:/etc/mysql/conf.d
       postgres:
         image: postgres:11
         env:
@@ -164,6 +164,12 @@ jobs:
       REMOTE_POSTGRES_DB: nocobase
 
     steps:
+      - name: Checkout ci repo
+        if: ${{ matrix.db.dialect == 'mysql' || matrix.db.dialect == 'mariadb' }}
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository }}
+          path: ci-config
       - name: Restart mysql
         if: ${{ matrix.db.dialect == 'mysql' }}
         uses: docker://docker
