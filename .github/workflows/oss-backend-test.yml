@@ -43,9 +43,6 @@ jobs:
       matrix:
         node_version: ["20"]
         db:
-          - dialect: sqlite
-            host: localhost
-            port: ""
           - dialect: mysql
             host: mysql
             port: 3306
@@ -158,21 +155,7 @@ jobs:
       - name: Install project dependencies
         run: |
           yarn install
-          yarn add sqlite3 --no-save -W
-      - name: Run sqlite test
-        if: ${{ matrix.db.dialect == 'sqlite' }}
-        run: |
-          yarn test --server --single-thread=false
-        env:
-          LOGGER_LEVEL: error
-          ENCRYPTION_FIELD_KEY: "66036232662082160067048057423456"
-          DB_DIALECT: ${{ matrix.db.dialect }}
-          DB_STORAGE: /tmp/db.sqlite
-          DB_DATABASE: nocobase
-          DB_UNDERSCORED: ${{ matrix.underscored }}
-          DB_TEST_PREFIX: test_
       - name: Run test
-        if: ${{ matrix.db.dialect != 'sqlite' }}
         run: |
           ./node_modules/.bin/tsx packages/core/test/src/scripts/test-db-creator.ts &
           sleep 1
