@@ -103,12 +103,16 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
           MYSQL_DATABASE: nocobase
         options: --name=mysql --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        volumes:
+          - ${{ github.workspace }}/ci-config/mysql:/etc/mysql/conf.d
       mariadb:
         image: mariadb:10.9
         env:
           MARIADB_ROOT_PASSWORD: password
           MARIADB_DATABASE: nocobase
         options: --name=mariadb --health-cmd="mysqladmin ping" --health-interval=20s --health-timeout=10s --health-retries=5
+        volumes:
+          - ${{ github.workspace }}/ci-config/mariadb:/etc/mysql/conf.d
       postgres:
         image: postgres:11
         env:
@@ -122,6 +126,22 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Checkout ci repo
+        if: ${{ matrix.db.dialect == 'mysql' || matrix.db.dialect == 'mariadb' }}
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository }}
+          path: ci-config
+      - name: Restart mysql
+        if: ${{ matrix.db.dialect == 'mysql' }}
+        uses: docker://docker
+        with:
+          args: docker restart mysql
+      - name: Restart mariadb
+        if: ${{ matrix.db.dialect == 'mariadb' }}
+        uses: docker://docker
+        with:
+          args: docker restart mariadb
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
