@@ -294,23 +294,22 @@ jobs:
         shell: bash
         if: ${{ steps.get-info.outputs.proRepos }}
         run: |
-          node -e "
-            const repos = JSON.parse(process.env.PRO_REPOS || '[]');
-            for (const repo of repos) {
-              if (!repo || repo === 'pro-plugins') continue;
-              console.log(repo);
-            }
-          " | while read -r repo; do
+          echo '${{ steps.get-info.outputs.proRepos }}' \
+            | tr -d '[]"' \
+            | tr ',' '\n' \
+            | sed 's/^ *//;s/ *$//' \
+            | while read -r repo; do
             target_dir="packages/pro-plugins/@nocobase/$repo"
             if [ -z "$repo" ]; then
+              continue
+            fi
+            if [ "$repo" = "pro-plugins" ]; then
               continue
             fi
             if [ ! -d "$target_dir/.git" ]; then
               git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/$repo.git "$target_dir"
             fi
           done
-        env:
-          PRO_REPOS: ${{ steps.get-info.outputs.proRepos }}
       - name: Checkout pro repos branch
         shell: bash
         if: ${{ steps.get-info.outputs.proRepos }}
