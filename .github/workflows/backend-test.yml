@@ -290,22 +290,52 @@ jobs:
           cd ../../
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      - name: Clone pro repo
+      - name: Clone independent pro repos
         shell: bash
-        if: ${{ inputs.pro_repo && inputs.pro_repo != 'pro-plugins' }}
+        if: ${{ steps.get-info.outputs.proRepos }}
         run: |
-          if [ ! -d "packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}" ]; then
-            git clone -b ${{ inputs.branch }} https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/${{ inputs.pro_repo }}.git packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
-          fi
-      - name: Try checkout pro repos branch
+          echo '${{ steps.get-info.outputs.proRepos }}' \
+            | tr -d '[]"' \
+            | tr ',' '\n' \
+            | sed 's/^ *//;s/ *$//' \
+            | while read -r repo; do
+            target_dir="packages/pro-plugins/@nocobase/$repo"
+            if [ -z "$repo" ]; then
+              continue
+            fi
+            if [ "$repo" = "pro-plugins" ]; then
+              continue
+            fi
+            if [ ! -d "$target_dir/.git" ]; then
+              git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/nocobase/$repo.git "$target_dir"
+            fi
+          done
+      - name: Checkout pro repos branch
         shell: bash
-        if: ${{ inputs.pro_pr_number == '' }}
+        if: ${{ steps.get-info.outputs.proRepos }}
         continue-on-error: true
         run: |
-          for plugins in ./packages/pro-plugins/@nocobase/*; do
-            echo "$plugins"
-            cd "$plugins"
-            git checkout ${{ steps.get-branch.outputs.baseBranch }} || true
+          target_pr_repo=""
+          if [ -n "${{ inputs.pro_pr_number }}" ] && [ "${{ inputs.pro_repo }}" != "pro-plugins" ]; then
+            target_pr_repo="${{ inputs.pro_repo }}"
+          fi
+
+          for plugin in ./packages/pro-plugins/@nocobase/*; do
+            echo "$plugin"
+            if [ ! -d "$plugin/.git" ]; then
+              continue
+            fi
+            repo_name="$(basename "$plugin")"
+            if [ -n "$target_pr_repo" ] && [ "$repo_name" = "$target_pr_repo" ]; then
+              echo "Skip $repo_name, it will checkout PR branch"
+              continue
+            fi
+            cd "$plugin"
+            if git ls-remote --exit-code --heads origin "${{ inputs.branch }}" >/dev/null 2>&1; then
+              git checkout "${{ inputs.branch }}" || true
+            else
+              git checkout "${{ steps.get-branch.outputs.baseBranch }}" || true
+            fi
             cd ../../../../
           done
       - name: Checkout pro pr
