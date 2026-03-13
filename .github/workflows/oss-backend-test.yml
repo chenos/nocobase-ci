@@ -176,8 +176,17 @@ jobs:
           node-version: ${{ matrix.node_version }}
           cache: "yarn"
       - name: Install project dependencies
+        run: yarn install
+      - name: Install sqlite build dependencies
+        if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
-          yarn install
+          apt-get update
+          apt-get install -y python3 make g++ pkg-config libsqlite3-dev
+      - name: Install sqlite3
+        if: ${{ matrix.db.dialect == 'sqlite' }}
+        env:
+          npm_config_build_from_source: "true"
+        run: |
           yarn add sqlite3 --no-save -W
       - name: Run sqlite test
         if: ${{ matrix.db.dialect == 'sqlite' }}
