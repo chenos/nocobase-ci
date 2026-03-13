@@ -178,10 +178,10 @@ jobs:
       - name: Install project dependencies
         run: |
           yarn install
+          yarn add sqlite3 --no-save -W
       - name: Run sqlite test
         if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
-          yarn add sqlite3 --no-save -W
           yarn test --server --single-thread=false
         env:
           LOGGER_LEVEL: error
