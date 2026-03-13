@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node_version: ["20-trixie"]
+        node_version: ["22-bookworm"]
         db:
           - dialect: sqlite
             host: localhost
@@ -80,7 +80,7 @@ jobs:
             collection_manager_schema: user_schema
         underscored: [true, false]
         include:
-          - node_version: 20-trixie
+          - node_version: 22-bookworm
             underscored: true
             db:
               dialect: postgres
@@ -178,10 +178,10 @@ jobs:
       - name: Install project dependencies
         run: |
           yarn install
-          yarn add sqlite3 --no-save -W
       - name: Run sqlite test
         if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
+          yarn add sqlite3 --no-save -W
           yarn test --server --single-thread=false
         env:
           LOGGER_LEVEL: error
