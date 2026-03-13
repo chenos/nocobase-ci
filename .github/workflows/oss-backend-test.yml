@@ -91,7 +91,7 @@ jobs:
               db_schema: public
               collection_manager_schema: public
     runs-on: ubuntu-latest
-    container: node:22-bookworm
+    container: node:22-trixie
     services:
       redis:
         image: redis/redis-stack-server:latest
