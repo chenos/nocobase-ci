@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node_version: ["22-bookworm"]
+        node_version: ["22"]
         db:
           - dialect: sqlite
             host: localhost
@@ -80,7 +80,7 @@ jobs:
             collection_manager_schema: user_schema
         underscored: [true, false]
         include:
-          - node_version: 22-bookworm
+          - node_version: 22
             underscored: true
             db:
               dialect: postgres
@@ -91,7 +91,7 @@ jobs:
               db_schema: public
               collection_manager_schema: public
     runs-on: ubuntu-latest
-    container: node:${{ matrix.node_version }}
+    container: node:22-bookworm
     services:
       redis:
         image: redis/redis-stack-server:latest
@@ -170,11 +170,11 @@ jobs:
           gh pr checkout ${{ inputs.pr_number }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      - name: Use Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node_version }}
-          cache: "yarn"
+      # - name: Use Node.js ${{ matrix.node_version }}
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: ${{ matrix.node_version }}
+      #     cache: "yarn"
       - name: Install project dependencies
         run: |
           yarn install
