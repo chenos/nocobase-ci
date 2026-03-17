@@ -176,9 +176,10 @@ jobs:
       #     node-version: ${{ matrix.node_version }}
       #     cache: "yarn"
       - name: Install project dependencies
+        # SQLite >= 6 requires glibc 2.38, which needs to be installed additionally in the trixie image
         run: |
           yarn install
-          yarn add sqlite3 --no-save -W
+          yarn add sqlite3@5.1.7 --no-save -W
       - name: Run sqlite test
         if: ${{ matrix.db.dialect == 'sqlite' }}
         run: |
