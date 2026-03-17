@@ -299,7 +299,7 @@ jobs:
             | tr ',' '\n' \
             | sed 's/^ *//;s/ *$//' \
             | while read -r repo; do
-            target_dir="packages/pro-plugins/@nocobase/$repo"
+            target_dir="packages/plugins/@nocobase/$repo"
             if [ -z "$repo" ]; then
               continue
             fi
@@ -320,7 +320,7 @@ jobs:
             target_pr_repo="${{ inputs.pro_repo }}"
           fi
 
-          for plugin in ./packages/pro-plugins/@nocobase/*; do
+          for plugin in ./packages/plugins/@nocobase/*; do
             echo "$plugin"
             if [ ! -d "$plugin/.git" ]; then
               continue
@@ -342,7 +342,7 @@ jobs:
         if: ${{ inputs.pro_repo && inputs.pro_repo != 'pro-plugins' && inputs.pro_pr_number != '' }}
         shell: bash
         run: |
-          cd ./packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}
+          cd ./packages/plugins/@nocobase/${{ inputs.pro_repo }}
           gh pr checkout ${{ inputs.pro_pr_number }}
           cd ../../../../
         env:
@@ -359,7 +359,7 @@ jobs:
         run: yarn add sqlite3 --no-save -W
       - name: Run test
         run: |
-          test_path="packages/pro-plugins/@nocobase/${{ inputs.pro_repo }}"
+          test_path="packages/plugins/@nocobase/${{ inputs.pro_repo }}"
           if [ "${{ inputs.pro_repo }}" = "pro-plugins" ]; then
             test_path="packages/pro-plugins/@nocobase"
           fi
