@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node_version: ["20"]
+        node_version: ["22"]
         db:
           - dialect: sqlite
             host: localhost
