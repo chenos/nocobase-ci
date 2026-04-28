@@ -97,7 +97,7 @@ jobs:
             client_package: "postgresql-client"
         underscored: [true, false]
         include:
-          - node_version: 20
+          - node_version: 22
             underscored: true
             db:
               dialect: postgres
