@@ -1,5 +1,7 @@
 name: NocoBase 3 quality
-run-name: nocobase3-quality:${{ inputs.request_id }}
+# `nocobase3-quality:PR-<n>:<request_id>`, or `nocobase3-quality:<branch>:<request_id>` for a push. nocobase-bot finds
+# the run by this exact title (its row's `runLabel`), so change both together.
+run-name: nocobase3-quality:${{ inputs.event_name == 'pull_request' && format('PR-{0}', inputs.pr_number) || inputs.target_branch }}:${{ inputs.request_id }}
 
 # The Quality checks of NocoBase 3 in nocobase/nocobase, dispatched by nocobase-bot (docs/ci-forwarding.md there) for
 # pull requests from branches of that repository whose direct target is v3-develop, v3-main or a single-level
