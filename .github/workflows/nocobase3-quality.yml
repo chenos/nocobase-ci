@@ -216,20 +216,12 @@ jobs:
             pnpm exec prettier --check --ignore-path .prettierignore -- "${prettier_files[@]}"
           fi
 
-  validation:
-    name: ${{ matrix.name }}
+  typecheck:
+    name: Typecheck
     needs: scope
     if: ${{ needs.scope.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Typecheck
-            checks: true
-          - name: Test
-            checks: false
     steps:
       - name: Check out the forwarded commit
         uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
@@ -253,61 +245,125 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Runs before the matrix script because a misdeclared dependency is decided by reading manifests, and reporting it
-      # in seconds is more useful than reporting it after a full typecheck.
+      # Runs before the typecheck because a misdeclared dependency is decided by reading manifests, and reporting it in
+      # seconds is more useful than reporting it after a full typecheck.
       - name: Check peer dependencies
-        if: ${{ matrix.checks }}
         run: pnpm peers:check
 
       # Same reasoning: a dependency declared in the wrong place is decided by reading manifests and sources, and it
       # otherwise surfaces only once a published package is installed somewhere its devDependencies are absent.
       - name: Check runtime dependencies
-        if: ${{ matrix.checks }}
         run: pnpm deps:check
 
       # A test that configures SQLite or asserts on SQLite-only SQL passes on every default run and fails only on another
       # database, so it is caught by reading the source rather than by running it.
       - name: Check database test portability
-        if: ${{ matrix.checks }}
         run: pnpm db-tests:check
 
       # The UI Library catalog the application Skill ships (references/frontend/references/ui-library.md) is generated
       # from ui-library/registry; an item added or redescribed without regenerating it fails here.
       - name: Check the UI Library catalog is up to date
-        if: ${{ matrix.checks }}
         run: pnpm ui-library-catalog:check
 
       # Starts each template on SQLite test databases and fails on an /api route that declares nothing, a documented
       # operation without tags, summary or operationId, a duplicate operationId, or a schema reference the document
       # cannot resolve. It needs no build: the templates run from their TypeScript sources.
       - name: Check API document declarations
-        if: ${{ matrix.checks }}
         run: pnpm openapi:check
 
       - name: Typecheck
-        if: ${{ matrix.name == 'Typecheck' }}
         run: pnpm typecheck
 
-      # The root `test` script minus the two application templates. Their `tests/` ship in the template package, so
-      # `Create-app smoke (default)` and `(examples)` run the very same suites with `pnpm test` in an application
-      # generated from the packed tarballs; running them here as well only repeats them against the workspace sources.
-      # The script is spelled out rather than called, so it is compared with the root script first: a change there
-      # fails this step instead of silently leaving a part of the suite unrun.
-      - name: Test
-        if: ${{ matrix.name == 'Test' }}
+  # The root `test` script, split across runners. One runner took about 25 minutes: `pnpm -r` waits for every
+  # dependency's tests before a package's own, so Studio, which depends on most of the workspace and takes about ten
+  # minutes alone, started last, and four vitest processes shared four cores. Studio is split in two with vitest's
+  # `--shard`; every other package runs in `others`, chosen by exclusion so a new package lands there on its own, with
+  # `--no-sort` because tests do not need dependency order.
+  #
+  # The two application templates are left out. Their `tests/` ship in the template package, so `Create-app smoke
+  # (default)` and `(examples)` run the very same suites with `pnpm test` in an application generated from the packed
+  # tarballs; running them here as well only repeats them against the workspace sources.
+  #
+  # The scripts are spelled out rather than called, so the ones they replace are compared first: a change to the root
+  # or Studio test script fails here instead of silently leaving a part of the suite unrun.
+  test-shard:
+    name: Test (${{ matrix.shard }})
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [studio 1/2, studio 2/2, others]
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check the test scripts this split replaces
         shell: bash
         run: |
           set -euo pipefail
-          expected='pnpm scripts:test && pnpm -r --if-present test && pnpm db:test'
-          actual="$(node -p "require('./package.json').scripts.test")"
-          if [ "$actual" != "$expected" ]; then
-            echo "::error::The root test script is now '$actual'; update the Test step of nocobase3-quality.yml in chenos/nocobase-ci to match it."
-            exit 1
-          fi
+          check() {
+            local actual
+            actual="$(node -p "require('./$1').scripts.test")"
+            if [ "$actual" != "$2" ]; then
+              echo "::error::The test script of $1 is now '$actual'; update the test shards of nocobase3-quality.yml in chenos/nocobase-ci to match it."
+              exit 1
+            fi
+          }
+          check package.json 'pnpm scripts:test && pnpm -r --if-present test && pnpm db:test'
+          check packages/apps/studio/package.json 'vitest run'
+
+      - name: Test Studio
+        if: ${{ startsWith(matrix.shard, 'studio ') }}
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: pnpm --filter @nocobase/studio exec vitest run --shard="${SHARD#studio }"
+
+      - name: Test every other package
+        if: ${{ matrix.shard == 'others' }}
+        shell: bash
+        run: |
+          set -euo pipefail
           root_package="$(node -p "require('./package.json').name")"
           pnpm scripts:test
-          pnpm -r --if-present --filter "!$root_package" --filter '!./packages/templates/**' test
+          pnpm -r --no-sort --if-present --filter "!$root_package" --filter '!./packages/templates/**' --filter '!@nocobase/studio' test
           pnpm db:test
+
+  test:
+    name: Test
+    needs: test-shard
+    if: ${{ always() && needs.test-shard.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every test shard
+        env:
+          RESULT: ${{ needs.test-shard.result }}
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "One or more test shards concluded with $RESULT."
+            exit 1
+          fi
 
   build:
     name: Build
@@ -524,7 +580,8 @@ jobs:
     needs:
       - scope
       - changed-files
-      - validation
+      - typecheck
+      - test
       - build
       - create-app-smoke
       - app-installer-smoke
@@ -537,7 +594,8 @@ jobs:
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
           CHANGED_FILES_RESULT: ${{ needs.changed-files.result }}
-          VALIDATION_RESULT: ${{ needs.validation.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           CREATE_APP_SMOKE_RESULT: ${{ needs['create-app-smoke'].result }}
           APP_INSTALLER_SMOKE_RESULT: ${{ needs['app-installer-smoke'].result }}
@@ -545,7 +603,7 @@ jobs:
           DB_SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.should_run }}
           DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
         run: |
-          if [[ "$SCOPE_RESULT" != "success" || "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
+          if [[ "$SCOPE_RESULT" != "success" || "$CHANGED_FILES_RESULT" != "success" || "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
             echo "One or more quality jobs failed or were cancelled."
             exit 1
           fi
