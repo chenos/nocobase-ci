@@ -227,10 +227,8 @@ jobs:
       matrix:
         include:
           - name: Typecheck
-            script: typecheck
             checks: true
           - name: Test
-            script: test
             checks: false
     steps:
       - name: Check out the forwarded commit
@@ -286,8 +284,30 @@ jobs:
         if: ${{ matrix.checks }}
         run: pnpm openapi:check
 
-      - name: ${{ matrix.name }}
-        run: pnpm ${{ matrix.script }}
+      - name: Typecheck
+        if: ${{ matrix.name == 'Typecheck' }}
+        run: pnpm typecheck
+
+      # The root `test` script minus the two application templates. Their `tests/` ship in the template package, so
+      # `Create-app smoke (default)` and `(examples)` run the very same suites with `pnpm test` in an application
+      # generated from the packed tarballs; running them here as well only repeats them against the workspace sources.
+      # The script is spelled out rather than called, so it is compared with the root script first: a change there
+      # fails this step instead of silently leaving a part of the suite unrun.
+      - name: Test
+        if: ${{ matrix.name == 'Test' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='pnpm scripts:test && pnpm -r --if-present test && pnpm db:test'
+          actual="$(node -p "require('./package.json').scripts.test")"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::The root test script is now '$actual'; update the Test step of nocobase3-quality.yml in chenos/nocobase-ci to match it."
+            exit 1
+          fi
+          root_package="$(node -p "require('./package.json').name")"
+          pnpm scripts:test
+          pnpm -r --if-present --filter "!$root_package" --filter '!./packages/templates/**' test
+          pnpm db:test
 
   build:
     name: Build
