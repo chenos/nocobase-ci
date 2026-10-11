@@ -147,8 +147,15 @@ jobs:
       # TypeScript program per file and hold it for the length of the run, so a single process grows with the size of
       # the change: a repository-wide refactor touching a couple of thousand files exhausts the runner's heap and the
       # job dies with an allocation failure instead of a lint result. One process per package bounds that, because
-      # each exits and frees what it held. `--filter "[$BASE_SHA]"` selects exactly the packages the diff touched, so
-      # an ordinary pull request still lints only what it changed.
+      # each exits and frees what it held.
+      #
+      # `...[$BASE_SHA]` selects the packages the diff touched and the packages depending on them, whose type-aware
+      # rules read the changed package's types. The workspace root is excluded from it: it owns every file outside a
+      # package, such as a changeset, so almost every change selects it, and its own `lint` script is a recursive lint
+      # of every package. The root's own files are covered instead by the root ESLint run below and by `db:lint`
+      # (dev/db, two seconds). A change to what every package lints with — the root manifest, lockfile, workspace
+      # catalog, npm or pnpm configuration, patches or the root ESLint configuration — runs the root `lint`, which is
+      # every package. A change to `@nocobase/dev-config` reaches every package through `...` already.
       #
       # Prettier keeps taking every changed file at once. It parses and prints one file at a time without any
       # cross-file analysis, so its memory does not scale the same way — the same diff that kills ESLint peaks well
@@ -168,6 +175,16 @@ jobs:
           # `.js`/`.mjs`/`.cjs` files, but no package owns them, so the per-package run below never reaches them.
           root_files=()
           prettier_files=()
+          lint_everything=false
+
+          # Every change kind, deletions and both sides of renames included, decides whether everything is linted.
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              package.json|pnpm-lock.yaml|pnpm-workspace.yaml|.npmrc|.pnpmfile.cjs|pnpmfile.cjs|patches/*|eslint.config.js)
+                lint_everything=true
+                ;;
+            esac
+          done < <(git diff --name-only --no-renames -z "$BASE_SHA" "$HEAD_SHA")
 
           while IFS= read -r -d '' file; do
             case "$file" in
@@ -186,7 +203,14 @@ jobs:
             pnpm exec eslint --no-warn-ignored --max-warnings 0 -- "${root_files[@]}"
           fi
 
-          pnpm --filter "[$BASE_SHA]" --if-present lint
+          if [ "$lint_everything" = true ]; then
+            echo "Workspace tooling changed; linting every package."
+            pnpm lint
+          else
+            root_package="$(node -p "require('./package.json').name")"
+            pnpm --filter "...[$BASE_SHA]" --filter "!$root_package" --if-present lint
+            pnpm db:lint
+          fi
 
           if ((${#prettier_files[@]})); then
             pnpm exec prettier --check --ignore-path .prettierignore -- "${prettier_files[@]}"
