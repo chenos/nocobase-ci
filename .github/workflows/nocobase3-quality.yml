@@ -274,11 +274,17 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-  # The root `test` script, split across runners. One runner took about 25 minutes: `pnpm -r` waits for every
-  # dependency's tests before a package's own, so Studio, which depends on most of the workspace and takes about ten
-  # minutes alone, started last, and four vitest processes shared four cores. Studio is split in two with vitest's
-  # `--shard`; every other package runs in `others`, chosen by exclusion so a new package lands there on its own, with
-  # `--no-sort` because tests do not need dependency order.
+  # The root `test` script, split across runners so that each takes about seven minutes. One runner took about 25
+  # minutes: `pnpm -r` waits for every dependency's tests before a package's own, so Studio, which depends on most of
+  # the workspace and takes about ten minutes alone, started last, and four vitest processes shared four cores.
+  #
+  # - Studio is split in two with vitest's `--shard`, which divides its test files evenly by count.
+  # - The heaviest other packages are assigned to a shard by name in `ASSIGNED_PACKAGES`, grouped by measured duration.
+  #   A name there that no longer matches a package fails the run rather than silently testing nothing.
+  # - `others` takes every remaining package by exclusion, so a new package lands there on its own, and the root's
+  #   `scripts:test` and `db:test`.
+  #
+  # Packages run with `--no-sort`, because tests do not need dependency order.
   #
   # The two application templates are left out. Their `tests/` ship in the template package, so `Create-app smoke
   # (default)` and `(examples)` run the very same suites with `pnpm test` in an application generated from the packed
@@ -295,7 +301,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [studio 1/2, studio 2/2, others]
+        shard: [studio 1/2, studio 2/2, agents, 'projects, mail, cli', others]
+    env:
+      SHARD: ${{ matrix.shard }}
+      ASSIGNED_PACKAGES: |
+        {
+          "agents": ["@nocobase/app-plugin-agents", "@nocobase/agent-runner"],
+          "projects, mail, cli": [
+            "@nocobase/app-plugin-projects",
+            "@nocobase/app-plugin-mail",
+            "@nocobase/create-plugin",
+            "@nocobase/app-plugin-releases",
+            "@nocobase/app-cli-client",
+            "@nocobase/app-cli"
+          ]
+        }
     steps:
       - name: Check out the forwarded commit
         uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
@@ -334,11 +354,33 @@ jobs:
           check package.json 'pnpm scripts:test && pnpm -r --if-present test && pnpm db:test'
           check packages/apps/studio/package.json 'vitest run'
 
+      - name: Check the assigned packages exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          known="$(pnpm ls -r --depth -1 --json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>console.log(JSON.parse(s).map(p=>p.name).join("\n")))')"
+          missing=0
+          while IFS= read -r name; do
+            if ! grep -qxF "$name" <<<"$known"; then
+              echo "::error::ASSIGNED_PACKAGES names $name, which is not a workspace package; update the test shards of nocobase3-quality.yml in chenos/nocobase-ci."
+              missing=1
+            fi
+          done < <(node -e 'for (const names of Object.values(JSON.parse(process.env.ASSIGNED_PACKAGES))) for (const name of names) console.log(name)')
+          exit "$missing"
+
       - name: Test Studio
         if: ${{ startsWith(matrix.shard, 'studio ') }}
-        env:
-          SHARD: ${{ matrix.shard }}
         run: pnpm --filter @nocobase/studio exec vitest run --shard="${SHARD#studio }"
+
+      - name: Test the assigned packages
+        if: ${{ matrix.shard != 'others' && !startsWith(matrix.shard, 'studio ') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          filters=()
+          while IFS= read -r name; do filters+=(--filter "$name"); done \
+            < <(node -e 'for (const name of JSON.parse(process.env.ASSIGNED_PACKAGES)[process.env.SHARD]) console.log(name)')
+          pnpm -r --no-sort --if-present "${filters[@]}" test
 
       - name: Test every other package
         if: ${{ matrix.shard == 'others' }}
@@ -346,8 +388,11 @@ jobs:
         run: |
           set -euo pipefail
           root_package="$(node -p "require('./package.json').name")"
+          filters=(--filter "!$root_package" --filter '!./packages/templates/**' --filter '!@nocobase/studio')
+          while IFS= read -r name; do filters+=(--filter "!$name"); done \
+            < <(node -e 'for (const names of Object.values(JSON.parse(process.env.ASSIGNED_PACKAGES))) for (const name of names) console.log(name)')
           pnpm scripts:test
-          pnpm -r --no-sort --if-present --filter "!$root_package" --filter '!./packages/templates/**' --filter '!@nocobase/studio' test
+          pnpm -r --no-sort --if-present "${filters[@]}" test
           pnpm db:test
 
   test:
