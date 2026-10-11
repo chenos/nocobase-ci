@@ -1,0 +1,515 @@
+name: NocoBase 3 quality
+run-name: nocobase3-quality:${{ inputs.request_id }}
+
+# The Quality checks of NocoBase 3 in nocobase/nocobase, dispatched by nocobase-bot (docs/ci-forwarding.md there) for
+# pull requests from branches of that repository whose direct target is v3-develop, v3-main or a single-level
+# <type>/v3-<name> stacked branch, and for pushes to v3-develop whose head commit does not say `[skip ci]`. Fork pull
+# requests are not forwarded. This file is the only definition of these checks: nocobase/nocobase keeps no copy.
+#
+# The bot mirrors these job names as check runs on nocobase/nocobase, so they are a protocol: `Changed files`,
+# `Typecheck`, `Test`, `Build`, `Create-app smoke (default)`, `Create-app smoke (examples)`, `App-installer smoke` and
+# `quality`. The database matrix is not mirrored job by job; `quality` fails when any selected database fails.
+#
+# A change that touches only docs/** runs nothing: every job reports skipped, as the old paths-ignore filter did.
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: UUID shared with the source-repository check runs.
+        required: true
+        type: string
+      event_name:
+        description: Source event type (pull_request or push).
+        required: true
+        type: string
+      head_sha:
+        description: Immutable 40-character source head SHA.
+        required: true
+        type: string
+      base_sha:
+        description: Immutable 40-character base SHA, or forty zeroes for the first push.
+        required: true
+        type: string
+      target_branch:
+        description: Source target branch.
+        required: true
+        type: string
+      pr_number:
+        description: Positive pull request number, or 0 for a push.
+        required: true
+        type: string
+      skip_label:
+        description: Sent by the bot for every forwarded workflow; unused here.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nocobase3-quality-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - name: Validate the dispatch
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          EVENT_NAME: ${{ inputs.event_name }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::Invalid CI dispatch: $1"; exit 1; }
+          [[ "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail 'request_id must be a UUID.'
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ && ! "$HEAD_SHA" =~ ^0+$ ]] || fail 'head_sha must be a non-zero commit SHA.'
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'base_sha must be a commit SHA.'
+          case "$EVENT_NAME" in
+            pull_request)
+              [[ "$TARGET_BRANCH" =~ ^(v3-develop|v3-main|[^/]+/v3-[^/]+)$ ]] || fail 'target_branch must be a v3 target.'
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || fail 'pr_number must be a positive integer.'
+              [[ ! "$BASE_SHA" =~ ^0+$ ]] || fail 'a pull request cannot use a zero base_sha.'
+              ;;
+            push)
+              [ "$TARGET_BRANCH" = 'v3-develop' ] || fail 'pushes are forwarded for v3-develop only.'
+              [ "$PR_NUMBER" = '0' ] || fail 'pr_number must be 0 for a push.'
+              ;;
+            *) fail 'event_name must be pull_request or push.' ;;
+          esac
+
+      # Read through the compare API rather than a clone: the answer only decides whether anything else runs. A
+      # comparison GitHub truncates (more than 300 files) or cannot make runs everything.
+      - name: Skip documentation-only changes
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! files=$(gh api "repos/nocobase/nocobase/compare/$BASE_SHA...$HEAD_SHA" --jq '.files | if length >= 300 then "__truncated__" else .[].filename end'); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qv '^docs/'; then
+            echo "Only docs/** changed; Quality is skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  changed-files:
+    name: Changed files
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      # ESLint is run per package rather than over one list of every changed file. The type-aware rules build a
+      # TypeScript program per file and hold it for the length of the run, so a single process grows with the size of
+      # the change: a repository-wide refactor touching a couple of thousand files exhausts the runner's heap and the
+      # job dies with an allocation failure instead of a lint result. One process per package bounds that, because
+      # each exits and frees what it held. `--filter "[$BASE_SHA]"` selects exactly the packages the diff touched, so
+      # an ordinary pull request still lints only what it changed.
+      #
+      # Prettier keeps taking every changed file at once. It parses and prints one file at a time without any
+      # cross-file analysis, so its memory does not scale the same way — the same diff that kills ESLint peaks well
+      # under half a gigabyte here.
+      - name: Check changed files
+        shell: bash
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$(git rev-list --max-parents=0 "$HEAD_SHA")"
+          fi
+
+          # Files outside any package: the root ESLint configuration covers `scripts/`, `tests/`, and the root
+          # `.js`/`.mjs`/`.cjs` files, but no package owns them, so the per-package run below never reaches them.
+          root_files=()
+          prettier_files=()
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              packages/*) ;;
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts) root_files+=("$file") ;;
+            esac
+
+            case "$file" in
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts|*.json|*.json5|*.jsonc|*.md|*.mdx|*.yml|*.yaml|*.css|*.scss|*.less|*.html)
+                prettier_files+=("$file")
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA")
+
+          if ((${#root_files[@]})); then
+            pnpm exec eslint --no-warn-ignored --max-warnings 0 -- "${root_files[@]}"
+          fi
+
+          pnpm --filter "[$BASE_SHA]" --if-present lint
+
+          if ((${#prettier_files[@]})); then
+            pnpm exec prettier --check --ignore-path .prettierignore -- "${prettier_files[@]}"
+          fi
+
+  validation:
+    name: ${{ matrix.name }}
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Typecheck
+            script: typecheck
+            checks: true
+          - name: Test
+            script: test
+            checks: false
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Runs before the matrix script because a misdeclared dependency is decided by reading manifests, and reporting it
+      # in seconds is more useful than reporting it after a full typecheck.
+      - name: Check peer dependencies
+        if: ${{ matrix.checks }}
+        run: pnpm peers:check
+
+      # Same reasoning: a dependency declared in the wrong place is decided by reading manifests and sources, and it
+      # otherwise surfaces only once a published package is installed somewhere its devDependencies are absent.
+      - name: Check runtime dependencies
+        if: ${{ matrix.checks }}
+        run: pnpm deps:check
+
+      # A test that configures SQLite or asserts on SQLite-only SQL passes on every default run and fails only on another
+      # database, so it is caught by reading the source rather than by running it.
+      - name: Check database test portability
+        if: ${{ matrix.checks }}
+        run: pnpm db-tests:check
+
+      # The UI Library catalog the application Skill ships (references/frontend/references/ui-library.md) is generated
+      # from ui-library/registry; an item added or redescribed without regenerating it fails here.
+      - name: Check the UI Library catalog is up to date
+        if: ${{ matrix.checks }}
+        run: pnpm ui-library-catalog:check
+
+      # Starts each template on SQLite test databases and fails on an /api route that declares nothing, a documented
+      # operation without tags, summary or operationId, a duplicate operationId, or a schema reference the document
+      # cannot resolve. It needs no build: the templates run from their TypeScript sources.
+      - name: Check API document declarations
+        if: ${{ matrix.checks }}
+        run: pnpm openapi:check
+
+      - name: ${{ matrix.name }}
+        run: pnpm ${{ matrix.script }}
+
+  build:
+    name: Build
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # pnpm build just produced every dist, so pack:check skips the build half of each prepack script.
+      - name: Check package tarballs
+        env:
+          PACK_DIR: ${{ runner.temp }}/nocobase-pack-check
+          PACK_CHECK_PREBUILT: '1'
+        run: pnpm pack:check
+
+      - name: Upload checked package tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-app-packages
+          path: ${{ runner.temp }}/nocobase-pack-check/*.tgz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  create-app-smoke:
+    name: Create-app smoke (${{ matrix.template }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [default, examples]
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Download checked package tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: create-app-packages
+          path: ${{ runner.temp }}/nocobase-pack-check
+
+      # Each runner installs the exact tarballs checked by Build into its own registry. Workspace package names have
+      # no upstream fallback, so an already-published version cannot hide a broken artifact from this checkout. The
+      # action is the checked-out source's own, at the workspace root.
+      - name: Verify create-app against the checked packages
+        uses: ./.github/actions/verify-create-app
+        with:
+          local-packages-only: 'true'
+          template-kind: ${{ matrix.template }}
+          package-artifacts: ${{ runner.temp }}/nocobase-pack-check
+
+  # Builds the default application's deployment archive and exercises the compiled installer's install, upgrade and
+  # rollback paths on Debian.
+  app-installer-smoke:
+    name: App-installer smoke
+    needs: build
+    runs-on: ubuntu-24.04
+    container: node:24-bookworm
+    timeout-minutes: 45
+    env:
+      APP_ROOT: /tmp/crm
+      NOCOBASE_APP_INSTALLER_USE_DIST: '1'
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install pm2
+        run: npm install -g pm2
+
+      # The archive is built from this checkout rather than from a published template, so it carries the build
+      # metadata and APP_STORAGE_DIR support the installer relies on, whether or not they are released yet.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app-installer
+        run: |
+          pnpm --filter @nocobase/app-installer build
+          test -f packages/tools/app-installer/dist/cli.js
+
+      # `pnpm build` builds the workspace packages the template depends on first, and vendors them into the archive.
+      - name: Build a deployment archive of the default template
+        run: |
+          pnpm --filter @nocobase/app-template-default build --tar
+          test -f packages/templates/app-template-default/storage/exports/dist.tar.gz
+
+      - name: Install, upgrade and roll back the archive
+        run: node scripts/smoke-app-installer.mjs --archive packages/templates/app-template-default/storage/exports/dist.tar.gz --root "$APP_ROOT" --port 13000 -- node packages/tools/app-installer/bin/run.js
+
+      - name: Show logs
+        if: failure()
+        run: |
+          tail -n 200 "$APP_ROOT"/logs/*.log || true
+          pm2 logs --nostream --lines 100 || true
+
+  db-integration-plan:
+    name: Select DB integration tests
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      databases: ${{ steps.select.outputs.databases }}
+      should_run: ${{ steps.select.outputs.should_run }}
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Select affected databases
+        id: select
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: HEAD_SHA="$(git rev-parse HEAD)" node scripts/select-db-integration-matrix.mjs
+
+  db-integration:
+    name: DB integration (${{ matrix.database }})
+    needs: db-integration-plan
+    if: ${{ needs.db-integration-plan.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        database: ${{ fromJSON(needs.db-integration-plan.outputs.databases) }}
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      - name: Test ${{ matrix.database }}
+        run: pnpm --filter @nocobase/db-${{ matrix.database }} test:integration
+
+  quality:
+    name: quality
+    needs:
+      - scope
+      - changed-files
+      - validation
+      - build
+      - create-app-smoke
+      - app-installer-smoke
+      - db-integration-plan
+      - db-integration
+    if: ${{ always() && needs.scope.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify parallel jobs
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          CHANGED_FILES_RESULT: ${{ needs.changed-files.result }}
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          CREATE_APP_SMOKE_RESULT: ${{ needs['create-app-smoke'].result }}
+          APP_INSTALLER_SMOKE_RESULT: ${{ needs['app-installer-smoke'].result }}
+          DB_PLAN_RESULT: ${{ needs['db-integration-plan'].result }}
+          DB_SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.should_run }}
+          DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
+        run: |
+          if [[ "$SCOPE_RESULT" != "success" || "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
+            echo "One or more quality jobs failed or were cancelled."
+            exit 1
+          fi
+
+          # Only accept a skipped matrix when the successful planner explicitly selected no databases.
+          if [[ "$DB_SHOULD_RUN" == "false" && "$DB_INTEGRATION_RESULT" == "skipped" ]]; then
+            echo "No database integration tests required."
+          elif [[ "$DB_SHOULD_RUN" != "true" || "$DB_INTEGRATION_RESULT" != "success" ]]; then
+            echo "Database integration tests failed, were cancelled, or were unexpectedly skipped."
+            exit 1
+          fi

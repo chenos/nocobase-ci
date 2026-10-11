@@ -1,0 +1,54 @@
+name: Check out a forwarded NocoBase 3 commit
+description: >-
+  Checks out the fixed commits of a NocoBase 3 change forwarded by nocobase-bot into the workspace root. A pull request is
+  merged locally from its fixed base and head, as GitHub's own pull_request checkout does; a push checks out its head.
+
+inputs:
+  event-name:
+    description: Source event type (pull_request or push).
+    required: true
+  head-sha:
+    description: Immutable source head commit.
+    required: true
+  base-sha:
+    description: Immutable source base commit, or forty zeroes for the first push.
+    required: true
+  fetch-depth:
+    description: History to fetch; 0 for every commit, which a merge and a changed-file comparison need.
+    default: '0'
+
+runs:
+  using: composite
+  steps:
+    # nocobase/nocobase is public, so no credential is needed and none is kept.
+    - name: Check out the fixed head
+      uses: actions/checkout@v4
+      with:
+        repository: nocobase/nocobase
+        ref: ${{ inputs.head-sha }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        persist-credentials: false
+        show-progress: false
+
+    - name: Merge the fixed head into the fixed base
+      if: ${{ inputs.event-name == 'pull_request' }}
+      shell: bash
+      env:
+        HEAD_SHA: ${{ inputs.head-sha }}
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        set -euo pipefail
+        # A container job runs as another user than the one owning the checkout.
+        git config --global --add safe.directory "$PWD"
+        git checkout --quiet --detach "$BASE_SHA"
+        if ! git -c user.name='github-actions[bot]' \
+          -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+          merge --quiet --no-ff --no-edit "$HEAD_SHA"; then
+          git merge --abort || true
+          echo "::error::The pull request head does not merge cleanly into its base."
+          exit 1
+        fi
+        if [ "$(git rev-parse HEAD^1)" != "$BASE_SHA" ] || [ "$(git rev-parse HEAD^2)" != "$HEAD_SHA" ]; then
+          echo "::error::The prepared merge does not have the requested base and head parents."
+          exit 1
+        fi
