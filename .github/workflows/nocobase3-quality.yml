@@ -460,15 +460,13 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-  create-app-smoke:
-    name: Create-app smoke (${{ matrix.template }})
+  # Keep mirrored names static: skipped matrix jobs retain their unexpanded expression,
+  # so the bot cannot find the expected default/examples checks on documentation-only PRs.
+  create-app-smoke-default:
+    name: Create-app smoke (default)
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        template: [default, examples]
     steps:
       - name: Check out the forwarded commit
         uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
@@ -502,7 +500,48 @@ jobs:
         uses: ./.github/actions/verify-create-app
         with:
           local-packages-only: 'true'
-          template-kind: ${{ matrix.template }}
+          template-kind: default
+          package-artifacts: ${{ runner.temp }}/nocobase-pack-check
+
+  create-app-smoke-examples:
+    name: Create-app smoke (examples)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Download checked package tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: create-app-packages
+          path: ${{ runner.temp }}/nocobase-pack-check
+
+      # Each runner installs the exact tarballs checked by Build into its own registry. Workspace package names have
+      # no upstream fallback, so an already-published version cannot hide a broken artifact from this checkout. The
+      # action is the checked-out source's own, at the workspace root.
+      - name: Verify create-app against the checked packages
+        uses: ./.github/actions/verify-create-app
+        with:
+          local-packages-only: 'true'
+          template-kind: examples
           package-artifacts: ${{ runner.temp }}/nocobase-pack-check
 
   # Builds the default application's deployment archive and exercises the compiled installer's install, upgrade and
@@ -630,7 +669,8 @@ jobs:
       - typecheck
       - test
       - build
-      - create-app-smoke
+      - create-app-smoke-default
+      - create-app-smoke-examples
       - app-installer-smoke
       - db-integration-plan
       - db-integration
@@ -644,13 +684,14 @@ jobs:
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           TEST_RESULT: ${{ needs.test.result }}
           BUILD_RESULT: ${{ needs.build.result }}
-          CREATE_APP_SMOKE_RESULT: ${{ needs['create-app-smoke'].result }}
+          CREATE_APP_DEFAULT_RESULT: ${{ needs['create-app-smoke-default'].result }}
+          CREATE_APP_EXAMPLES_RESULT: ${{ needs['create-app-smoke-examples'].result }}
           APP_INSTALLER_SMOKE_RESULT: ${{ needs['app-installer-smoke'].result }}
           DB_PLAN_RESULT: ${{ needs['db-integration-plan'].result }}
           DB_SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.should_run }}
           DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
         run: |
-          if [[ "$SCOPE_RESULT" != "success" || "$CHANGED_FILES_RESULT" != "success" || "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
+          if [[ "$SCOPE_RESULT" != "success" || "$CHANGED_FILES_RESULT" != "success" || "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_DEFAULT_RESULT" != "success" || "$CREATE_APP_EXAMPLES_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
             echo "One or more quality jobs failed or were cancelled."
             exit 1
           fi
