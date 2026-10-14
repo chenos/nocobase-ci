@@ -5,8 +5,8 @@ run-name: nocobase3-quality:${{ inputs.event_name == 'pull_request' && format('P
 
 # The Quality checks of NocoBase 3 in nocobase/nocobase, dispatched by nocobase-bot (docs/ci-forwarding.md there) for
 # pull requests from branches of that repository whose direct target is v3-develop, v3-main or a single-level
-# <type>/v3-<name> stacked branch, and for pushes to v3-develop whose head commit does not say `[skip ci]`. Fork pull
-# requests are not forwarded. This file is the only definition of these checks: nocobase/nocobase keeps no copy.
+# <type>/v3-<name> stacked branch, and for pushes to v3-develop or v3-main whose head commit does not say `[skip ci]`.
+# Fork pull requests are not forwarded. This file is the only definition of these checks: nocobase/nocobase keeps no copy.
 #
 # The bot mirrors these job names as check runs on nocobase/nocobase, so they are a protocol: `Changed files`,
 # `Typecheck`, `Test`, `Build`, `Create-app smoke (default)`, `Create-app smoke (examples)`, `App-installer smoke` and
@@ -82,7 +82,7 @@ jobs:
               [[ ! "$BASE_SHA" =~ ^0+$ ]] || fail 'a pull request cannot use a zero base_sha.'
               ;;
             push)
-              [ "$TARGET_BRANCH" = 'v3-develop' ] || fail 'pushes are forwarded for v3-develop only.'
+              [[ "$TARGET_BRANCH" =~ ^(v3-develop|v3-main)$ ]] || fail 'pushes are forwarded for v3-develop and v3-main only.'
               [ "$PR_NUMBER" = '0' ] || fail 'pr_number must be 0 for a push.'
               ;;
             *) fail 'event_name must be pull_request or push.' ;;
