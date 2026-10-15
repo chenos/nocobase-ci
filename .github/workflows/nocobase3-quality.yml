@@ -12,6 +12,12 @@ run-name: nocobase3-quality:${{ inputs.event_name == 'pull_request' && format('P
 # `Typecheck`, `Test`, `Build`, `Create-app smoke (default)`, `Create-app smoke (examples)`, `App-installer smoke` and
 # `quality`. The database matrix is not mirrored job by job; `quality` fails when any selected database fails.
 #
+# `Pro DB integration` is mirrored too, but `quality` does not wait for it, so it never blocks a merge: it tests the
+# database drivers kept in the private nocobase/nocobase3-pro (KingbaseES, Dameng, OceanBase) against the forwarded
+# commit, when the planner selects every database, that is when a change touches what all of them share. This repository
+# keeps no secret for it: each `Pro DB integration (<database>)` job proves to nocobase-bot with its OIDC token that it is
+# a run the bot dispatched, and gets a token that can only read nocobase3-pro, revoked as soon as Pro is cloned.
+#
 # A change that touches only docs/** runs nothing: every job reports skipped, as the old paths-ignore filter did.
 
 on:
@@ -603,6 +609,8 @@ jobs:
     outputs:
       databases: ${{ steps.select.outputs.databases }}
       should_run: ${{ steps.select.outputs.should_run }}
+      pro_should_run: ${{ steps.pro.outputs.should_run }}
+      pro_branch: ${{ steps.pro.outputs.branch }}
     steps:
       - name: Check out the forwarded commit
         uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
@@ -621,6 +629,35 @@ jobs:
         env:
           BASE_SHA: ${{ inputs.base_sha }}
         run: HEAD_SHA="$(git rev-parse HEAD)" node scripts/select-db-integration-matrix.mjs
+
+      # The Pro drivers are built on what the planner treats as shared by every database (packages/libs/db, db-testkit,
+      # the root manifests and so on), so they run exactly when it selects all of them. Pro's develop follows v3-develop
+      # and its main v3-main; a pull request stacked on another branch takes the line its base has the fewest commits
+      # beyond, develop on a tie.
+      - name: Select the Pro database drivers
+        id: pro
+        env:
+          DATABASES: ${{ steps.select.outputs.databases }}
+          EVENT_NAME: ${{ inputs.event_name }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          every=$(node --input-type=module -e "import { databases } from './scripts/select-db-integration-matrix.mjs'; console.log(JSON.stringify(databases))")
+          should_run=$(node -e 'const [a, b] = process.argv.slice(1).map(JSON.parse); console.log(a.length === b.length && b.every((each) => a.includes(each)))' "$DATABASES" "$every")
+          case "$TARGET_BRANCH" in
+            v3-main) branch=main ;;
+            v3-develop) branch=develop ;;
+            *)
+              beyond_develop=$(git rev-list --count "origin/v3-develop..$BASE_SHA")
+              beyond_main=$(git rev-list --count "origin/v3-main..$BASE_SHA")
+              if [ "$beyond_main" -lt "$beyond_develop" ]; then branch=main; else branch=develop; fi
+              echo "Stacked on $TARGET_BRANCH: $beyond_develop commits beyond v3-develop, $beyond_main beyond v3-main."
+              ;;
+          esac
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Pro DB integration: $should_run (Pro $branch)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   db-integration:
     name: DB integration (${{ matrix.database }})
@@ -660,6 +697,124 @@ jobs:
 
       - name: Test ${{ matrix.database }}
         run: pnpm --filter @nocobase/db-${{ matrix.database }} test:integration
+
+  pro-db-integration:
+    name: Pro DB integration (${{ matrix.database }})
+    needs: db-integration-plan
+    if: ${{ needs.db-integration-plan.outputs.pro_should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [kingbase, dameng, oceanbase]
+    env:
+      PRO_DIR: ${{ github.workspace }}/../nocobase3-pro
+    steps:
+      - name: Check out the forwarded commit
+        uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
+        with:
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      # nocobase-bot answers once per database and run attempt, and only a run it dispatched; the token can only read
+      # nocobase3-pro and is revoked when this step ends, before any code of the forwarded commit runs.
+      - name: Clone Pro ${{ needs.db-integration-plan.outputs.pro_branch }}
+        env:
+          BOT_URL: https://bot.v2.test.nocobase.com
+          REQUEST_ID: ${{ inputs.request_id }}
+          DATABASE: ${{ matrix.database }}
+          PRO_BRANCH: ${{ needs.db-integration-plan.outputs.pro_branch }}
+        run: |
+          set -euo pipefail
+          oidc=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=nocobase-bot" | jq -r .value)
+          echo "::add-mask::$oidc"
+          body=$(jq -n --arg request_id "$REQUEST_ID" --arg database "$DATABASE" '{request_id: $request_id, database: $database}')
+          answer=$(curl -sS --retry 3 --retry-all-errors -w '\n%{http_code}' -X POST -H "Authorization: Bearer $oidc" -H 'content-type: application/json' --data "$body" "$BOT_URL/api/ci/pro-source-token")
+          status=${answer##*$'\n'}
+          answer=${answer%$'\n'*}
+          if [ "$status" != 200 ]; then
+            echo "::error::nocobase-bot gave no Pro source token (HTTP $status): $(jq -r '.error // empty' <<<"$answer" 2>/dev/null || true)"
+            exit 1
+          fi
+          token=$(jq -r .token <<<"$answer")
+          echo "::add-mask::$token"
+          revoke() {
+            curl -fsS -X DELETE -H "Authorization: Bearer $token" -H 'Accept: application/vnd.github+json' \
+              https://api.github.com/installation/token >/dev/null || echo '::warning::The Pro source token could not be revoked; it expires within an hour.'
+          }
+          trap revoke EXIT
+          auth=$(printf 'x-access-token:%s' "$token" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" clone --quiet --depth 1 \
+            --branch "$PRO_BRANCH" --no-recurse-submodules https://github.com/nocobase/nocobase3-pro.git "$PRO_DIR"
+          git -C "$PRO_DIR" log -1 --format='Pro %H %s' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Pro's lockfile and catalog follow the NocoBase 3 commit it pins; synchronized and resolved again here for the
+      # forwarded one, in this run only, so a change to a dependency still reaches the tests.
+      - name: Put the forwarded commit in place of Pro's NocoBase 3
+        run: |
+          set -euo pipefail
+          rm -rf "$PRO_DIR/vendor/nocobase3"
+          mkdir -p "$PRO_DIR/vendor/nocobase3"
+          git archive HEAD | tar -x -C "$PRO_DIR/vendor/nocobase3"
+          cd "$PRO_DIR"
+          node scripts/sync-workspace-config.mjs --write
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        working-directory: ${{ env.PRO_DIR }}
+        run: |
+          CI=true pnpm install --no-frozen-lockfile
+          git diff --stat -- pnpm-lock.yaml pnpm-workspace.yaml
+
+      - name: Build shared development config
+        working-directory: ${{ env.PRO_DIR }}
+        run: pnpm dev-config:build
+
+      - name: Test ${{ matrix.database }}
+        working-directory: ${{ env.PRO_DIR }}
+        run: pnpm --filter @nocobase/db-${{ matrix.database }} test:integration
+
+  pro-db-integration-summary:
+    name: Pro DB integration
+    needs:
+      - scope
+      - db-integration-plan
+      - pro-db-integration
+    if: ${{ always() && needs.scope.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every Pro database
+        env:
+          PLAN_RESULT: ${{ needs['db-integration-plan'].result }}
+          SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.pro_should_run }}
+          RESULT: ${{ needs['pro-db-integration'].result }}
+        run: |
+          if [ "$PLAN_RESULT" != success ]; then
+            echo "Selecting the DB integration tests concluded with $PLAN_RESULT."
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" == false && "$RESULT" == skipped ]]; then
+            echo "No change to what every database shares; the Pro drivers are not tested."
+          elif [[ "$SHOULD_RUN" != true || "$RESULT" != success ]]; then
+            echo "One or more Pro database drivers concluded with $RESULT."
+            exit 1
+          fi
 
   quality:
     name: quality
