@@ -283,11 +283,10 @@ jobs:
         run: pnpm typecheck
 
   # The root `test` script, split across runners so that each takes about seven minutes. One runner took about 25
-  # minutes: `pnpm -r` waits for every dependency's tests before a package's own, so Studio, which depends on most of
-  # the workspace and takes about ten minutes alone, started last, and four vitest processes shared four cores.
+  # minutes: `pnpm -r` waits for every dependency's tests before a package's own, so the packages that depend on most
+  # of the workspace started last, and four vitest processes shared four cores.
   #
-  # - Studio is split in two with vitest's `--shard`, which divides its test files evenly by count.
-  # - The heaviest other packages are assigned to a shard by name in `ASSIGNED_PACKAGES`, grouped by measured duration.
+  # - The heaviest packages are assigned to a shard by name in `ASSIGNED_PACKAGES`, grouped by measured duration.
   #   A name there that no longer matches a package fails the run rather than silently testing nothing.
   # - `others` takes every remaining package by exclusion, so a new package lands there on its own, and the root's
   #   `scripts:test` and `db:test`.
@@ -299,7 +298,7 @@ jobs:
   # tarballs; running them here as well only repeats them against the workspace sources.
   #
   # The scripts are spelled out rather than called, so the ones they replace are compared first: a change to the root
-  # or Studio test script fails here instead of silently leaving a part of the suite unrun.
+  # test script fails here instead of silently leaving a part of the suite unrun.
   test-shard:
     name: Test (${{ matrix.shard }})
     needs: scope
@@ -309,7 +308,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [studio 1/2, studio 2/2, agents, 'projects, mail, cli', others]
+        shard: [agents, 'projects, mail, cli', others]
     env:
       SHARD: ${{ matrix.shard }}
       ASSIGNED_PACKAGES: |
@@ -360,7 +359,6 @@ jobs:
             fi
           }
           check package.json 'pnpm scripts:test && pnpm -r --if-present test && pnpm db:test'
-          check packages/apps/studio/package.json 'vitest run'
 
       - name: Check the assigned packages exist
         shell: bash
@@ -376,12 +374,8 @@ jobs:
           done < <(node -e 'for (const names of Object.values(JSON.parse(process.env.ASSIGNED_PACKAGES))) for (const name of names) console.log(name)')
           exit "$missing"
 
-      - name: Test Studio
-        if: ${{ startsWith(matrix.shard, 'studio ') }}
-        run: pnpm --filter @nocobase/studio exec vitest run --shard="${SHARD#studio }"
-
       - name: Test the assigned packages
-        if: ${{ matrix.shard != 'others' && !startsWith(matrix.shard, 'studio ') }}
+        if: ${{ matrix.shard != 'others' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -396,7 +390,7 @@ jobs:
         run: |
           set -euo pipefail
           root_package="$(node -p "require('./package.json').name")"
-          filters=(--filter "!$root_package" --filter '!./packages/templates/**' --filter '!@nocobase/studio')
+          filters=(--filter "!$root_package" --filter '!./packages/templates/**')
           while IFS= read -r name; do filters+=(--filter "!$name"); done \
             < <(node -e 'for (const names of Object.values(JSON.parse(process.env.ASSIGNED_PACKAGES))) for (const name of names) console.log(name)')
           pnpm scripts:test
