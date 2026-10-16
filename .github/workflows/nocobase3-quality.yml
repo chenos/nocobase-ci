@@ -431,19 +431,8 @@ jobs:
           head-sha: ${{ inputs.head_sha }}
           base-sha: ${{ inputs.base_sha }}
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.7.0
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      # `others` always has scripts:test to run; an assigned shard runs when one of its packages is selected.
+      # `others` always has scripts:test to run; an assigned shard runs when one of its packages is selected. A shard
+      # that installs nothing must not ask setup-node to cache the pnpm store, whose saving fails when it is absent.
       - name: Select the packages of this shard
         id: shard
         shell: bash
@@ -465,6 +454,18 @@ jobs:
             echo "No package of this shard is selected; nothing to test."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: ${{ steps.shard.outputs.run == 'true' && 'pnpm' || '' }}
 
       - name: Install dependencies
         if: ${{ steps.shard.outputs.run == 'true' }}
@@ -583,7 +584,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+          # Saving the pnpm store cache fails when nothing was installed.
+          cache: ${{ needs.quality-plan.outputs.run_build == 'true' && 'pnpm' || '' }}
 
       - name: Install dependencies
         if: ${{ env.RUN_BUILD == 'true' }}
