@@ -1,0 +1,16 @@
+# NocoBase Studio quality helpers
+
+`studio-quality.yml` runs the checks of the private `nocobase/studio` that need no secret: `Submodule pointer`, `Lint`, `Typecheck`, `Test`, `API document` and `CLI reference` for every request, and `Studio e2e` for pull requests. `nocobase-bot` dispatches it to a repository of the CI repository pool with the same inputs as `2013xile/nocobase-ci`'s `studio-ci.yml` (`request_id`, `event_name`, `head_sha`, `base_sha`, `target_branch`, `pr_number`, `skip_label` and `head_ref`), finds the run by its title `studio-quality:PR-<n>:<request_id>` or `studio-quality:<branch>:<request_id>`, and mirrors each job as a check of the same name on `nocobase/studio`. `Preview` and `Dist`, which need that repository's secrets, stay in its `studio-ci.yml`.
+
+The helpers in this directory are checked out from this repository with a sparse checkout, never from the forwarded source:
+
+- `studio-checkout` validates the dispatch (`validate-inputs.mjs`), asks `nocobase-bot` for a token with the job's OIDC token (`POST /api/ci/studio-source-token`, audience `nocobase-bot`, `{"request_id", "job"}`), checks the fixed commits out with their `vendor/nocobase3` submodule, merges a pull request into its base (`prepare-snapshot.mjs`), and revokes the token before any of Studio's code runs. The bot answers only a run of this workflow on `main` that it dispatched, once per job and run attempt, with a token that can only read `nocobase/studio`, so this repository keeps no secret. A job that calls it needs `id-token: write`.
+- `studio-framework` builds a pull request against `nocobase/nocobase`'s branch of the same name as its head while that is unmerged (`mirror-workspace.mjs` carries its workspace settings over), and `studio-framework-gate` fails `Submodule pointer` until the committed pointer contains the merged framework change. Both read the public repository with the run's own token.
+
+`validate-inputs.mjs`, `prepare-snapshot.mjs`, `mirror-workspace.mjs`, `studio-framework` and `studio-framework-gate` are copies of `2013xile/nocobase-ci`'s `.github/nocobase3/`, where `studio-ci.yml` uses them too; change both together. Like every workflow of this repository, a change reaches the pool when `main` is pushed to all of its repositories.
+
+Run the tests with:
+
+```bash
+node --test .github/nocobase3/tests/*.test.mjs
+```
