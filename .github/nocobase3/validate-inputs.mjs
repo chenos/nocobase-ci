@@ -28,6 +28,10 @@ export function validateInputs(input) {
   if (input.checkoutPath !== undefined && !/^[a-z][a-z0-9-]{0,63}$/u.test(input.checkoutPath)) {
     reject('path must be a single lowercase directory name.');
   }
+  // Optional, so studio-ci.yml in 2013xile/nocobase-ci, which shares this file and passes no SUBMODULES, keeps working.
+  if (input.submodules !== undefined && input.submodules !== '' && !['true', 'false'].includes(input.submodules)) {
+    reject('submodules must be true or false.');
+  }
   if (!UUID_PATTERN.test(input.requestId)) reject('request_id must be a UUID.');
   if (!['pull_request', 'push'].includes(input.eventName)) {
     reject('event_name must be pull_request or push.');
@@ -90,6 +94,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       targetBranch: process.env.TARGET_BRANCH ?? '',
       prNumber: process.env.PR_NUMBER ?? '',
       skipLabel: process.env.SKIP_LABEL ?? '',
+      submodules: process.env.SUBMODULES,
     });
   } catch (error) {
     if (!(error instanceof InputValidationError)) throw error;

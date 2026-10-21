@@ -105,3 +105,26 @@ test('fails a conflicting fixed snapshot and aborts the merge', () => {
   assert.equal(git(['rev-parse', 'HEAD']), conflictBase);
   assert.equal(git(['status', '--porcelain']), '');
 });
+
+test('skips the submodule update when the job does not need the framework', () => {
+  git(['checkout', '--detach', cleanHead]);
+  // A .gitmodules naming a submodule that cannot be fetched would fail `submodule update --init`.
+  writeFileSync(path.join(fixture, '.gitmodules'), '[submodule "vendor/missing"]\n\tpath = vendor/missing\n\turl = /nonexistent/nocobase3\n');
+  git(['update-index', '--add', '--cacheinfo', `160000,${common},vendor/missing`]);
+  // Staged by name: `git add .` would drop the gitlink, whose directory is absent.
+  git(['add', '.gitmodules']);
+  git(['commit', '-m', 'add an unreachable submodule']);
+  const withModule = git(['rev-parse', 'HEAD']);
+  prepareSnapshot({
+    cwd: fixture,
+    eventName: 'push',
+    headSha: withModule,
+    baseSha: '0'.repeat(40),
+    mergePullRequest: 'false',
+    submodules: 'false',
+  });
+  assert.equal(git(['rev-parse', 'HEAD']), withModule);
+  assert.throws(() =>
+    prepareSnapshot({ cwd: fixture, eventName: 'push', headSha: withModule, baseSha: '0'.repeat(40), mergePullRequest: 'false' }),
+  );
+});
