@@ -124,7 +124,8 @@ jobs:
         run: node scripts/check-submodule.mjs
 
   # The pull request's type and bilingual changelog (Studio's PR template), checked by Studio's own
-  # scripts/release/check-pr-body.mjs from the merge checkout. studio-checkout saves the title and body with the source
+  # scripts/release/check-pr-body.mjs from the merge checkout, or, when the pull request's base predates that script, from
+  # the latest target branch the checkout fetched, so every pull request is checked whatever its base. studio-checkout saves the title and body with the source
   # token, which nocobase-bot gives pull request read access for this job only, and revokes it before the script runs;
   # the script reads the file and is never given a token. Neither the framework submodule nor dependencies are needed.
   # The body is read when the job runs: after editing the description, re-run this job.
@@ -163,15 +164,25 @@ jobs:
         with:
           node-version: 24
 
-      # A base from before the check existed has no script; the job then passes rather than block the pull request.
+      # A base from before the check existed has no script: the latest target branch's merged scripts/release checks the
+      # description instead, so an outdated branch fails like any other and is told to sync with it.
       - name: Check the pull request description
         working-directory: studio
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
-          if [ -f scripts/release/check-pr-body.mjs ]; then
-            node scripts/release/check-pr-body.mjs "$RUNNER_TEMP/pull-request.json"
-          else
-            echo "::notice::scripts/release/check-pr-body.mjs is not in this checkout; the pull request description is not checked."
+          set -euo pipefail
+          tools=scripts/release
+          if [ ! -f "$tools/check-pr-body.mjs" ]; then
+            tools="$RUNNER_TEMP/target-release-scripts"
+            mkdir -p "$tools"
+            if ! git archive "refs/remotes/origin/$TARGET_BRANCH" scripts/release 2>/dev/null | tar -x -C "$tools" --strip-components=2; then
+              echo "::error::Neither this pull request nor $TARGET_BRANCH has scripts/release/check-pr-body.mjs, so the description cannot be checked against the Studio PR template. Merge or rebase the latest dev."
+              exit 1
+            fi
+            echo "::notice::This branch predates the Studio PR template; the description is checked with $TARGET_BRANCH's scripts/release. Merge or rebase the latest $TARGET_BRANCH to get the template, the scripts and the rules in AGENTS.md."
           fi
+          node "$tools/check-pr-body.mjs" "$RUNNER_TEMP/pull-request.json"
 
   check:
     name: ${{ matrix.name }}
