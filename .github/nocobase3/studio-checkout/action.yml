@@ -1,8 +1,8 @@
 name: Check out a forwarded nocobase/studio snapshot
 description: >-
   Validate a forwarded Studio dispatch, get a read-only nocobase/studio token from nocobase-bot with the job's OIDC
-  token, check out the immutable commits with the vendor/nocobase3 submodule, optionally merge the pull request, and
-  revoke the token before any code of the forwarded commit runs.
+  token, check out the immutable commits with the vendor/nocobase3 submodule, optionally merge the pull request,
+  optionally save the pull request's title and body, and revoke the token before any code of the forwarded commit runs.
 
 inputs:
   path:
@@ -38,6 +38,14 @@ inputs:
   merge-pull-request:
     description: Create and check out a local merge commit from base_sha and head_sha.
     default: 'true'
+  submodules:
+    description: Check out vendor/nocobase3 and its submodules (true or false); a job that reads only Studio's own files sets false.
+    default: 'true'
+  pull-request-body:
+    description: >-
+      A file to write the source pull request's `{ "title", "body" }` to, read with the source token before it is
+      revoked (the job's token then needs pull request read access from nocobase-bot). Ignored for a push.
+    default: ''
 
 runs:
   using: composite
@@ -54,6 +62,7 @@ runs:
         TARGET_BRANCH: ${{ inputs.target-branch }}
         PR_NUMBER: ${{ inputs.pr-number }}
         SKIP_LABEL: ${{ inputs.skip-label }}
+        SUBMODULES: ${{ inputs.submodules }}
       run: node "$GITHUB_ACTION_PATH/../validate-inputs.mjs"
 
     # The pool repositories keep no secret: the job proves to nocobase-bot with its OIDC token (the job needs
@@ -94,7 +103,7 @@ runs:
         token: ${{ steps.source-token.outputs.token }}
         persist-credentials: false
         fetch-depth: 0
-        submodules: recursive
+        submodules: ${{ inputs.submodules == 'false' && 'false' || 'recursive' }}
         path: ${{ inputs.path }}
         show-progress: false
 
@@ -106,7 +115,31 @@ runs:
         HEAD_SHA: ${{ inputs.head-sha }}
         BASE_SHA: ${{ inputs.base-sha }}
         MERGE_PULL_REQUEST: ${{ inputs.merge-pull-request }}
+        SUBMODULES: ${{ inputs.submodules }}
       run: node "$GITHUB_ACTION_PATH/../prepare-snapshot.mjs"
+
+    # The pull request's title and body are read here, with the source token and before it is revoked, so that the job's
+    # own steps, which run code of the forwarded commit, read a plain file and never hold a token. The API answers the
+    # current title and body, not those at head_sha: editing the description and re-running the job is how it is fixed.
+    - name: Save the pull request description
+      if: ${{ inputs.pull-request-body != '' && inputs.event-name == 'pull_request' }}
+      shell: bash
+      env:
+        SOURCE_TOKEN: ${{ steps.source-token.outputs.token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        OUTPUT_FILE: ${{ inputs.pull-request-body }}
+      run: |
+        set -euo pipefail
+        answer=$(curl --fail-with-body --silent --show-error --location --retry 3 --retry-all-errors \
+          --header 'Accept: application/vnd.github+json' \
+          --header "Authorization: Bearer $SOURCE_TOKEN" \
+          --header 'X-GitHub-Api-Version: 2022-11-28' \
+          "https://api.github.com/repos/nocobase/studio/pulls/$PR_NUMBER") || {
+          echo "::error::Could not read pull request #$PR_NUMBER of nocobase/studio: $(jq -r '.message // empty' <<<"${answer:-}" 2>/dev/null || true)"
+          exit 1
+        }
+        mkdir -p "$(dirname "$OUTPUT_FILE")"
+        jq '{title: (.title // ""), body: (.body // "")}' <<<"$answer" > "$OUTPUT_FILE"
 
     - name: Revoke the source token
       if: ${{ always() && steps.source-token.outputs.token != '' }}

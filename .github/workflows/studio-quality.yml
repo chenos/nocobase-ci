@@ -6,8 +6,8 @@ run-name: studio-quality:${{ inputs.event_name == 'pull_request' && format('PR-{
 # The checks of the private nocobase/studio that need no secret, dispatched by nocobase-bot (docs/ci-forwarding.md there)
 # to a repository of the CI repository pool, which mirrors each job below as a check run of the same name on
 # nocobase/studio. The job names are that protocol: `Submodule pointer`, `Lint`, `Typecheck`, `Test`, `API document` and
-# `CLI reference` for every request, and `Studio e2e` for pull requests. Studio's `Preview` and `Dist`, which need the
-# secrets of 2013xile/nocobase-ci, stay in its studio-ci.yml.
+# `CLI reference` for every request, and `PR description` and `Studio e2e` for pull requests. Studio's `Preview` and
+# `Dist`, which need the secrets of 2013xile/nocobase-ci, stay in its studio-ci.yml.
 #
 # This repository keeps no secret. Each job checks Studio out with `.github/nocobase3/studio-checkout`, which proves to
 # nocobase-bot with the job's OIDC token that it is a run the bot dispatched and gets a token that can only read
@@ -122,6 +122,56 @@ jobs:
       - name: Check vendor/nocobase3 is reachable from a public branch or tag
         working-directory: studio
         run: node scripts/check-submodule.mjs
+
+  # The pull request's type and bilingual changelog (Studio's PR template), checked by Studio's own
+  # scripts/release/check-pr-body.mjs from the merge checkout. studio-checkout saves the title and body with the source
+  # token, which nocobase-bot gives pull request read access for this job only, and revokes it before the script runs;
+  # the script reads the file and is never given a token. Neither the framework submodule nor dependencies are needed.
+  # The body is read when the job runs: after editing the description, re-run this job.
+  pr-description:
+    name: PR description
+    if: ${{ inputs.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted CI helpers
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/nocobase3
+
+      - name: Check out fixed source snapshot
+        uses: ./.github/nocobase3/studio-checkout
+        with:
+          path: studio
+          job: PR description
+          request-id: ${{ inputs.request_id }}
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+          target-branch: ${{ inputs.target_branch }}
+          pr-number: ${{ inputs.pr_number }}
+          skip-label: ${{ inputs.skip_label }}
+          submodules: 'false'
+          pull-request-body: ${{ runner.temp }}/pull-request.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # A base from before the check existed has no script; the job then passes rather than block the pull request.
+      - name: Check the pull request description
+        working-directory: studio
+        run: |
+          if [ -f scripts/release/check-pr-body.mjs ]; then
+            node scripts/release/check-pr-body.mjs "$RUNNER_TEMP/pull-request.json"
+          else
+            echo "::notice::scripts/release/check-pr-body.mjs is not in this checkout; the pull request description is not checked."
+          fi
 
   check:
     name: ${{ matrix.name }}
