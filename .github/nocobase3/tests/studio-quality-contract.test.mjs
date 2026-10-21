@@ -106,9 +106,12 @@ test('saves the pull request description with the source token, and checks it fr
   assert.match(source, /          submodules: 'false'\n          pull-request-body: \$\{\{ runner\.temp \}\}\/pull-request\.json\n/u);
   assert.match(source, /timeout-minutes: 10\n/u);
   assert.doesNotMatch(source, /pnpm|install|^\s+(github-)?token:|studio-framework/mu);
-  const run = source.indexOf('node scripts/release/check-pr-body.mjs "$RUNNER_TEMP/pull-request.json"');
+  const run = source.indexOf('node "$tools/check-pr-body.mjs" "$RUNNER_TEMP/pull-request.json"');
   assert.ok(run !== -1 && source.indexOf('working-directory: studio') < run);
-  assert.match(source, /if \[ -f scripts\/release\/check-pr-body\.mjs \]; then[\s\S]+else\n\s+echo "::notice::/u);
+  // A base without the script is checked with the target branch's scripts/release, never skipped.
+  assert.match(source, /git archive "refs\/remotes\/origin\/\$TARGET_BRANCH" scripts\/release/u);
+  assert.match(source, /echo "::error::Neither this pull request nor \$TARGET_BRANCH has/u);
+  assert.doesNotMatch(source, /the pull request description is not checked/u);
   // Every other job keeps the framework submodule and asks for no description.
   for (const id of ['submodule', 'check', 'e2e']) assert.doesNotMatch(job(id), /submodules:|pull-request-body:/u, id);
 });
