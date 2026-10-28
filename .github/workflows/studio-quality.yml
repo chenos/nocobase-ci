@@ -28,8 +28,12 @@ run-name: studio-quality:${{ inputs.event_name == 'pull_request' && format('PR-{
 # scripts/check-submodule.mjs only checks the pointer is reachable, and is never given a token). Both read the public
 # nocobase/nocobase with this run's own token.
 #
-# This repository is public: nothing uploads Studio's source or its application build, and nothing is cached. Only the
-# e2e job uploads its traces and failure screenshots, on failure, kept for three days.
+# This repository is public: nothing uploads Studio's source or its application build. Only the e2e job uploads its
+# traces and failure screenshots, on failure, kept for three days. The only cache is the `dist` of the public framework
+# packages Studio's build needs, keyed by the framework commit: `Framework build cache` builds it from
+# nocobase/nocobase alone, without any of Studio's code, and is the only job that writes it; `Studio e2e` only restores
+# it, so a pull request's code can never put anything in it. That build uses nocobase/nocobase's own lockfile, so a
+# dependency bundled into a package's `dist` may resolve to another version than Studio's lockfile would pick.
 
 on:
   workflow_dispatch:
@@ -275,6 +279,12 @@ jobs:
     env:
       # The build typechecks Studio and the framework together, which needs more than Node's default heap.
       NODE_OPTIONS: --max-old-space-size=6144
+    # What `Framework build cache` needs to fill the cache for the next request; named before any of Studio's code runs.
+    outputs:
+      framework-sha: ${{ steps.framework.outputs.sha }}
+      framework-packages: ${{ steps.framework-build.outputs.packages }}
+      framework-key: ${{ steps.framework-build.outputs.key }}
+      framework-cached: ${{ steps.framework-cache.outputs.cache-hit }}
     steps:
       - name: Check out trusted CI helpers
         uses: actions/checkout@v4
@@ -313,6 +323,22 @@ jobs:
           head-ref: ${{ inputs.head_ref }}
           github-token: ${{ github.token }}
 
+      # Trusted, and before any of Studio's code runs: which framework packages Studio's build needs, read from
+      # package.json files only, and the cache key of their `dist` for the chosen framework commit.
+      - name: Name the framework build
+        id: framework-build
+        env:
+          FRAMEWORK_SHA: ${{ steps.framework.outputs.sha }}
+        run: node .github/nocobase3/framework-packages.mjs studio "$FRAMEWORK_SHA"
+
+      # Read only: `Framework build cache` is the only job that writes it.
+      - name: Restore the framework build
+        id: framework-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ steps.framework-build.outputs.key }}
+          path: studio/vendor/nocobase3/packages/*/*/dist
+
       - name: Install dependencies
         working-directory: studio
         env:
@@ -320,10 +346,20 @@ jobs:
         run: pnpm install "$INSTALL_FLAG"
 
       # Builds the workspace packages Studio depends on, then Studio's client and server into dist, with the universal
-      # nb-studio and nocobase-runner packages in dist/runners.
+      # nb-studio and nocobase-runner packages in dist/runners. With the framework's `dist` restored, only Studio's own
+      # workspace packages are built before it, and the build skips its dependency step.
       - name: Build Studio
         working-directory: studio
-        run: pnpm build
+        env:
+          FRAMEWORK_CACHED: ${{ steps.framework-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$FRAMEWORK_CACHED" = true ]; then
+            pnpm --filter '@nocobase/studio^...' --filter '!./vendor/**' build
+            NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD=1 pnpm build
+          else
+            pnpm build
+          fi
 
       - name: Install Chromium
         working-directory: studio
@@ -344,3 +380,97 @@ jobs:
           path: studio/test-results
           if-no-files-found: ignore
           retention-days: 3
+
+  # Fills the cache `Studio e2e` restores, for the next request on the same framework commit, when this one missed it.
+  # Trusted: it never checks Studio out and runs none of its code. It takes the framework commit and package names
+  # `Studio e2e` named before any of Studio's code ran, checks them, and builds those packages (with their
+  # dependencies) in a checkout of the public nocobase/nocobase at that commit, with nocobase/nocobase's own lockfile.
+  # Not a check of nocobase/studio: nocobase-bot mirrors only the jobs it expects, so its outcome is visible here only.
+  framework-cache:
+    name: Framework build cache
+    needs: e2e
+    if: ${{ always() && inputs.event_name == 'pull_request' && needs.e2e.outputs.framework-key != '' && needs.e2e.outputs.framework-cached != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Check out trusted CI helpers
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/nocobase3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The key must be the one framework-packages.mjs derives from the commit and the names, on this Node version.
+      - name: Check the request
+        id: request
+        env:
+          FRAMEWORK_SHA: ${{ needs.e2e.outputs.framework-sha }}
+          PACKAGES: ${{ needs.e2e.outputs.framework-packages }}
+          KEY: ${{ needs.e2e.outputs.framework-key }}
+        run: |
+          set -euo pipefail
+          [[ "$FRAMEWORK_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid framework commit."; exit 1; }
+          for name in $PACKAGES; do
+            [[ "$name" =~ ^@nocobase/[a-z0-9][a-z0-9.-]*$ ]] || { echo "::error::Invalid package name."; exit 1; }
+          done
+          node=$(node -p 'process.versions.node.split(".")[0]')
+          digest=$(printf '%s' "$(tr ' ' '\n' <<<"$PACKAGES")" | sha256sum | cut -c1-16)
+          expected="studio-framework-dist-v1-node${node}-${FRAMEWORK_SHA}-${digest}"
+          [ "$KEY" = "$expected" ] || { echo "::error::The cache key does not match the commit and package names."; exit 1; }
+          echo "key=$expected" >> "$GITHUB_OUTPUT"
+
+      # Another request may have filled it meanwhile.
+      - name: Look the cache up
+        id: lookup
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ steps.request.outputs.key }}
+          path: studio/vendor/nocobase3/packages/*/*/dist
+          lookup-only: true
+
+      # The same directory as in `Studio e2e`, so the cached paths match. nocobase/nocobase is public: no credential.
+      - name: Check out the framework
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        env:
+          FRAMEWORK_SHA: ${{ needs.e2e.outputs.framework-sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p studio/vendor/nocobase3
+          cd studio/vendor/nocobase3
+          git init --quiet
+          git fetch --quiet --depth 1 --no-tags https://github.com/nocobase/nocobase.git "$FRAMEWORK_SHA"
+          git checkout --quiet --detach FETCH_HEAD
+
+      - name: Set up pnpm
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: studio/vendor/nocobase3/package.json
+          run_install: false
+
+      - name: Build the framework packages
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        working-directory: studio/vendor/nocobase3
+        env:
+          PACKAGES: ${{ needs.e2e.outputs.framework-packages }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          filters=()
+          for name in $PACKAGES; do filters+=(--filter "$name..."); done
+          pnpm "${filters[@]}" build
+
+      - name: Save the framework build
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.request.outputs.key }}
+          path: studio/vendor/nocobase3/packages/*/*/dist

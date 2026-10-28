@@ -38,7 +38,8 @@ test('names its runs as nocobase-bot finds them, and takes the forwarded inputs 
 });
 
 test('keeps the check job names, with PR description and Studio e2e for pull requests only', () => {
-  assert.deepEqual(jobNames(), expectedJobs);
+  // `Framework build cache` is not a check: nocobase-bot mirrors only the names it expects.
+  assert.deepEqual(jobNames(), [...expectedJobs, 'Framework build cache']);
   for (const id of ['pr-description', 'e2e']) {
     assert.match(job(id), /if: \$\{\{ inputs\.event_name == 'pull_request' \}\}/u, id);
   }
@@ -87,8 +88,27 @@ test("gates the framework half before the pull request's own script, which gets 
   }
 });
 
-test('caches nothing and uploads only failed e2e results, briefly', () => {
-  assert.doesNotMatch(workflow, /actions\/cache|^\s+cache:/mu);
+test('caches only the framework build, written by a job that runs no Studio code, and uploads only failed e2e results', () => {
+  const restore = /uses: actions\/cache\/restore@v4\n/gu;
+  const save = /uses: actions\/cache\/save@v4\n/gu;
+  // Studio e2e only restores, and does so before installing, so the pull request's code cannot have chosen the key.
+  const e2e = job('e2e');
+  assert.equal([...e2e.matchAll(restore)].length, 1);
+  assert.doesNotMatch(e2e, /actions\/cache\/save|actions\/cache@|^\s+cache:/mu);
+  const restored = e2e.indexOf('- name: Restore the framework build');
+  assert.ok(e2e.indexOf('- name: Name the framework build') < restored);
+  assert.ok(restored !== -1 && restored < e2e.indexOf('- name: Install dependencies'));
+  // The only writer never checks Studio out and never asks nocobase-bot for a token.
+  const cache = job('framework-cache');
+  assert.equal([...workflow.matchAll(save)].length, 1);
+  assert.equal([...cache.matchAll(save)].length, 1);
+  assert.doesNotMatch(cache, /nocobase3\/studio-checkout|nocobase3\/studio-framework\n|id-token|secrets\.|github-token|SOURCE_TOKEN/u);
+  assert.match(cache, /    needs: e2e\n/u);
+  assert.match(cache, /https:\/\/github\.com\/nocobase\/nocobase\.git "\$FRAMEWORK_SHA"/u);
+  for (const source of [e2e, cache]) assert.match(source, /path: studio\/vendor\/nocobase3\/packages\/\*\/\*\/dist\n/u);
+  // No other job caches anything.
+  assert.equal([...workflow.matchAll(/uses: actions\/cache/gu)].length, 3);
+  assert.doesNotMatch(workflow, /^\s+cache:/mu);
   const uploads = [...workflow.matchAll(/uses: actions\/upload-artifact@v4/gu)];
   assert.equal(uploads.length, 1);
   assert.match(job('e2e'), /if: \$\{\{ failure\(\) \}\}\n        uses: actions\/upload-artifact@v4\n        with:\n          name: studio-e2e-results\n          path: studio\/test-results\n          if-no-files-found: ignore\n          retention-days: 3\n/u);
