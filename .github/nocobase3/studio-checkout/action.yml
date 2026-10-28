@@ -39,7 +39,9 @@ inputs:
     description: Create and check out a local merge commit from base_sha and head_sha.
     default: 'true'
   submodules:
-    description: Check out vendor/nocobase3 and its submodules (true or false); a job that reads only Studio's own files sets false.
+    description: >-
+      Check out vendor/nocobase3 and its submodules: true with their full history, shallow at the committed pointer only
+      (a job that needs no framework history), or false (a job that reads only Studio's own files).
     default: 'true'
   pull-request-body:
     description: >-
@@ -103,7 +105,8 @@ runs:
         token: ${{ steps.source-token.outputs.token }}
         persist-credentials: false
         fetch-depth: 0
-        submodules: ${{ inputs.submodules == 'false' && 'false' || 'recursive' }}
+        # A shallow framework is fetched by prepare-snapshot.mjs at the pointer it checks out, not with Studio's history.
+        submodules: ${{ inputs.submodules == 'true' && 'recursive' || 'false' }}
         path: ${{ inputs.path }}
         show-progress: false
 

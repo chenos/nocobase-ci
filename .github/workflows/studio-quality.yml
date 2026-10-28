@@ -236,6 +236,8 @@ jobs:
           target-branch: ${{ inputs.target_branch }}
           pr-number: ${{ inputs.pr_number }}
           skip-label: ${{ inputs.skip_label }}
+          # Only the committed framework pointer; the framework's history is for `Submodule pointer`.
+          submodules: shallow
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -304,6 +306,8 @@ jobs:
           target-branch: ${{ inputs.target_branch }}
           pr-number: ${{ inputs.pr_number }}
           skip-label: ${{ inputs.skip_label }}
+          # Only the committed framework pointer; the framework's history is for `Submodule pointer`.
+          submodules: shallow
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4

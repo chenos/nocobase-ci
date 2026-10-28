@@ -120,7 +120,8 @@ test('saves the pull request description with the source token, and checks it fr
   assert.match(save, /SOURCE_TOKEN: \$\{\{ steps\.source-token\.outputs\.token \}\}/u);
   assert.match(save, /"https:\/\/api\.github\.com\/repos\/nocobase\/studio\/pulls\/\$PR_NUMBER"/u);
   assert.match(save, /jq '\{title: \(\.title \/\/ ""\), body: \(\.body \/\/ ""\)\}'/u);
-  assert.match(checkout, /submodules: \$\{\{ inputs\.submodules == 'false' && 'false' \|\| 'recursive' \}\}/u);
+  // Only a full framework comes with the checkout; a shallow one is fetched at the pointer by prepare-snapshot.mjs.
+  assert.match(checkout, /submodules: \$\{\{ inputs\.submodules == 'true' && 'recursive' \|\| 'false' \}\}/u);
 
   const source = job('pr-description');
   assert.match(source, /          submodules: 'false'\n          pull-request-body: \$\{\{ runner\.temp \}\}\/pull-request\.json\n/u);
@@ -132,6 +133,10 @@ test('saves the pull request description with the source token, and checks it fr
   assert.match(source, /git archive "refs\/remotes\/origin\/\$TARGET_BRANCH" scripts\/release/u);
   assert.match(source, /echo "::error::Neither this pull request nor \$TARGET_BRANCH has/u);
   assert.doesNotMatch(source, /the pull request description is not checked/u);
-  // Every other job keeps the framework submodule and asks for no description.
-  for (const id of ['submodule', 'check', 'e2e']) assert.doesNotMatch(job(id), /submodules:|pull-request-body:/u, id);
+  // `Submodule pointer` checks the framework's history; the checks and e2e need only the committed pointer.
+  assert.doesNotMatch(job('submodule'), /submodules:|pull-request-body:/u);
+  for (const id of ['check', 'e2e']) {
+    assert.match(job(id), /\n          submodules: shallow\n/u, id);
+    assert.doesNotMatch(job(id), /pull-request-body:/u, id);
+  }
 });

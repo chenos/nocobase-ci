@@ -29,8 +29,8 @@ export function validateInputs(input) {
     reject('path must be a single lowercase directory name.');
   }
   // Optional, so studio-ci.yml in 2013xile/nocobase-ci, which shares this file and passes no SUBMODULES, keeps working.
-  if (input.submodules !== undefined && input.submodules !== '' && !['true', 'false'].includes(input.submodules)) {
-    reject('submodules must be true or false.');
+  if (input.submodules !== undefined && input.submodules !== '' && !['true', 'shallow', 'false'].includes(input.submodules)) {
+    reject('submodules must be true, shallow or false.');
   }
   if (!UUID_PATTERN.test(input.requestId)) reject('request_id must be a UUID.');
   if (!['pull_request', 'push'].includes(input.eventName)) {

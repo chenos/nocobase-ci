@@ -128,3 +128,47 @@ test('skips the submodule update when the job does not need the framework', () =
     prepareSnapshot({ cwd: fixture, eventName: 'push', headSha: withModule, baseSha: '0'.repeat(40), mergePullRequest: 'false' }),
   );
 });
+
+test('fetches only the committed framework pointer when the job asks for a shallow submodule', () => {
+  const framework = mkdtempSync(path.join(tmpdir(), 'nocobase3-framework-'));
+  // Git refuses file:// submodules unless allowed; the real framework is fetched over https.
+  const allowed = process.env.GIT_ALLOW_PROTOCOL;
+  process.env.GIT_ALLOW_PROTOCOL = 'file';
+  const run = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  try {
+    run(framework, ['init']);
+    run(framework, ['config', 'user.name', 'Pro CI test']);
+    run(framework, ['config', 'user.email', 'pro-ci-test@example.com']);
+    run(framework, ['config', 'commit.gpgsign', 'false']);
+    // Serve any commit by SHA, as GitHub does for `submodule update --depth 1`.
+    run(framework, ['config', 'uploadpack.allowAnySHA1InWant', 'true']);
+    for (const step of ['one', 'two', 'three']) {
+      writeFileSync(path.join(framework, 'step.txt'), `${step}\n`);
+      run(framework, ['add', '.']);
+      run(framework, ['commit', '-m', step]);
+    }
+    const pointer = run(framework, ['rev-parse', 'HEAD~1']);
+    git(['checkout', '--detach', cleanHead]);
+    writeFileSync(path.join(fixture, '.gitmodules'), `[submodule "vendor/framework"]\n\tpath = vendor/framework\n\turl = file://${framework}\n`);
+    git(['update-index', '--add', '--cacheinfo', `160000,${pointer},vendor/framework`]);
+    git(['add', '.gitmodules']);
+    git(['commit', '-m', 'add the framework submodule']);
+    const withModule = git(['rev-parse', 'HEAD']);
+    prepareSnapshot({
+      cwd: fixture,
+      eventName: 'push',
+      headSha: withModule,
+      baseSha: '0'.repeat(40),
+      mergePullRequest: 'false',
+      submodules: 'shallow',
+    });
+    const vendor = path.join(fixture, 'vendor/framework');
+    assert.equal(run(vendor, ['rev-parse', 'HEAD']), pointer);
+    assert.equal(run(vendor, ['rev-parse', '--is-shallow-repository']), 'true');
+    assert.equal(run(vendor, ['rev-list', '--count', 'HEAD']), '1');
+  } finally {
+    if (allowed === undefined) delete process.env.GIT_ALLOW_PROTOCOL;
+    else process.env.GIT_ALLOW_PROTOCOL = allowed;
+    rmSync(framework, { recursive: true, force: true });
+  }
+});

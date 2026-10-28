@@ -48,7 +48,8 @@ export function prepareSnapshot({ cwd, eventName, headSha, baseSha, mergePullReq
   // A job that reads only Studio's own files, such as `PR description`, skips the framework submodule's checkout.
   if (submodules === 'false') return;
   git(cwd, ['submodule', 'sync', '--recursive']);
-  git(cwd, ['submodule', 'update', '--init', '--recursive']);
+  // `shallow` fetches only the committed pointer (by SHA, which GitHub serves), for a job that needs no framework history.
+  git(cwd, ['submodule', 'update', '--init', '--recursive', ...(submodules === 'shallow' ? ['--depth', '1'] : [])]);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

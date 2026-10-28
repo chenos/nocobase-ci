@@ -75,7 +75,7 @@ runs:
               elif [ -z "$open" ] && [ -n "$pulls" ]; then
                 reason="nocobase/nocobase's pull requests from \`$HEAD_REF\` were closed without merging."
               else
-                git -C "$vendor" fetch --quiet --no-tags --no-recurse-submodules "$PUBLIC_URL" "$tip"
+                git -C "$vendor" fetch --quiet --no-tags --no-recurse-submodules --depth 1 "$PUBLIC_URL" "$tip"
                 git -C "$vendor" checkout --quiet --detach "$tip"
                 # pnpm reads the catalog, overrides and build settings only from Studio's workspace root, which mirrors
                 # vendor/nocobase3/pnpm-workspace.yaml below its own `packages:`; mirror the branch's.

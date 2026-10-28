@@ -114,9 +114,9 @@ test('preserves custom target branches for all existing sources', () => {
   }
 });
 
-test('accepts an absent, true or false submodules flag and rejects anything else', () => {
-  for (const submodules of [undefined, '', 'true', 'false']) {
+test('accepts an absent, true, shallow or false submodules flag and rejects anything else', () => {
+  for (const submodules of [undefined, '', 'true', 'shallow', 'false']) {
     assert.doesNotThrow(() => validateInputs({ ...validPullRequest, submodules }), String(submodules));
   }
-  rejects({ submodules: 'recursive' }, 'submodules must be true or false.');
+  rejects({ submodules: 'recursive' }, 'submodules must be true, shallow or false.');
 });
