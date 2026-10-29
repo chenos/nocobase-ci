@@ -208,9 +208,14 @@ jobs:
           # The client, the Node tooling and the server tsconfigs.
           - name: Typecheck
             run: pnpm typecheck
-          # Vitest over tests/**; no build and no browser.
+          # Vitest over tests/**; no build and no browser. Then the queries Studio runs against PostgreSQL in production,
+          # on a disposable PostgreSQL the script starts in Docker (`test:releases:postgres`); a branch without the
+          # script skips it.
           - name: Test
-            run: pnpm test
+            run: >-
+              pnpm test &&
+              if node -e "process.exit(require('./package.json').scripts?.['test:releases:postgres'] ? 0 : 1)";
+              then pnpm test:releases:postgres; else echo 'No test:releases:postgres script; PostgreSQL queries not checked.'; fi
           # Starts Studio on SQLite test databases with the framework's check; no build needed.
           - name: API document
             run: pnpm openapi:check

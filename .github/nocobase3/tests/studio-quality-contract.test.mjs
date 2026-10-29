@@ -140,3 +140,11 @@ test('saves the pull request description with the source token, and checks it fr
     assert.doesNotMatch(job(id), /pull-request-body:/u, id);
   }
 });
+
+test('Test also runs the PostgreSQL query check when the branch has it', () => {
+  const source = readFileSync(new URL('../../workflows/studio-quality.yml', import.meta.url), 'utf8');
+  const test = source.slice(source.indexOf('- name: Test\n'), source.indexOf('- name: API document'));
+  assert.match(test, /pnpm test &&/u);
+  assert.match(test, /scripts\?\.\['test:releases:postgres'\]/u);
+  assert.match(test, /then pnpm test:releases:postgres; else echo /u);
+});
