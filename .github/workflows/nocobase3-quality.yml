@@ -643,6 +643,7 @@ jobs:
   # Keep mirrored names static: skipped matrix jobs retain their unexpanded expression,
   # so the bot cannot find the expected default/examples checks on documentation-only PRs.
   # Both run only when the plan selects a template or create-app, and need Build's tarballs of every package.
+  # Examples runs its complete node and client projects on separate runners to leave room for the lifecycle checks.
   create-app-smoke-default:
     name: Create-app smoke (default)
     needs:
@@ -687,14 +688,18 @@ jobs:
           template-kind: default
           package-artifacts: ${{ runner.temp }}/nocobase-pack-check
 
-  create-app-smoke-examples:
-    name: Create-app smoke (examples)
+  create-app-smoke-examples-projects:
+    name: Create-app smoke examples (${{ matrix.project }})
     needs:
       - build
       - quality-plan
     if: ${{ needs.quality-plan.outputs.run_create_app == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [node, client]
     steps:
       - name: Check out the forwarded commit
         uses: chenos/nocobase-ci/.github/actions/nocobase3-checkout@main
@@ -729,7 +734,27 @@ jobs:
         with:
           local-packages-only: 'true'
           template-kind: examples
+          test-project: ${{ matrix.project }}
           package-artifacts: ${{ runner.temp }}/nocobase-pack-check
+
+  # Keep the mirrored check static even when the plan skips the matrix. Every project also runs dev, build,
+  # production start, archive deployment and retarget; both consume the same checked tarballs from Build.
+  create-app-smoke-examples:
+    name: Create-app smoke (examples)
+    needs:
+      - quality-plan
+      - create-app-smoke-examples-projects
+    if: ${{ always() && needs.quality-plan.outputs.run_create_app == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every Examples project
+        env:
+          RESULT: ${{ needs['create-app-smoke-examples-projects'].result }}
+        run: |
+          if [[ "$RESULT" != success ]]; then
+            echo "One or more Examples projects failed, were cancelled, or were unexpectedly skipped ($RESULT)."
+            exit 1
+          fi
 
   # Builds the default application's deployment archive and exercises the compiled installer's install, upgrade and
   # rollback paths on Debian. It builds what it needs itself, so it runs beside Build rather than after it.
