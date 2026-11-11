@@ -15,3 +15,11 @@ Run the tests with:
 ```bash
 node --test .github/nocobase3/tests/*.test.mjs
 ```
+
+## Studio E2E browser environment
+
+`Studio e2e` and `Framework build cache` build on `ubuntu-24.04` with Node 24. Builds stay on the hosted runner, which includes the compiler needed by SQLite; the Playwright browser image does not include a C++ toolchain.
+
+After installing workspace dependencies, `run-studio-browser.sh` reads the actual installed `@playwright/test` version and selects `mcr.microsoft.com/playwright:v<version>-noble`. A short Chromium launch check runs before building Studio, and `Flows` runs in the same image. No job installs browsers or system packages through apt. Only the checkout and the existing Node/pnpm installations are mounted; the container uses the host's UID and Node runtime, a temporary home, and only the explicit CI environment variables. The server and browser run together in the container, so localhost, screenshots and traces keep working without a remote-browser protocol.
+
+Noble matches the host OS for native modules. The framework cache uses a new `v2-noble-x64` namespace so neither job reuses older Ubuntu host builds. When changing the OS or architecture, keep both build jobs, the browser image and the cache namespace aligned. A Playwright upgrade selects its matching image automatically and fails at the browser check if that release has no Noble image.

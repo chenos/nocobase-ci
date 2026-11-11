@@ -31,7 +31,7 @@ const run = (...args) => execFileSync(process.execPath, [script, ...args], { enc
 test('names the framework packages Studio and its own packages depend on, never Studio packages or registry ones', () => {
   const out = run(studio(), sha);
   assert.match(out, /^packages=@nocobase\/app-cli-client @nocobase\/app-client @nocobase\/app-server$/mu);
-  assert.match(out, new RegExp(`^key=studio-framework-dist-v1-node\\d+-${sha}-[0-9a-f]{16}$`, 'mu'));
+  assert.match(out, new RegExp(`^key=studio-framework-dist-v2-noble-x64-node\\d+-${sha}-[0-9a-f]{16}$`, 'mu'));
 });
 
 test('refuses anything but a 40-character commit', () => {

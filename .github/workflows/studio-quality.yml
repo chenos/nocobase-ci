@@ -278,7 +278,8 @@ jobs:
   e2e:
     name: Studio e2e
     if: ${{ inputs.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    # Match the Noble browser container, including native modules built on the host.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
@@ -354,6 +355,24 @@ jobs:
           INSTALL_FLAG: ${{ steps.framework.outputs.install-flag }}
         run: pnpm install "$INSTALL_FLAG"
 
+      # The image is selected from the installed Playwright package; no apt or browser download during the job.
+      - name: Verify Chromium
+        timeout-minutes: 5
+        working-directory: studio
+        run: |
+          ../.github/nocobase3/run-studio-browser.sh "$PWD" node --input-type=module <<'NODE'
+          import { chromium } from '@playwright/test';
+          const browser = await chromium.launch();
+          try {
+            const page = await browser.newPage();
+            await page.setContent('<title>Studio browser check</title>');
+            if (await page.title() !== 'Studio browser check') throw new Error('Chromium check failed');
+            console.log(`Chromium ${browser.version()} is ready`);
+          } finally {
+            await browser.close();
+          }
+          NODE
+
       # Builds the workspace packages Studio depends on, then Studio's client and server into dist, with the universal
       # nb-studio and nocobase-runner packages in dist/runners. With the framework's `dist` restored, only Studio's own
       # workspace packages are built before it, and the build skips its dependency step.
@@ -370,14 +389,10 @@ jobs:
             pnpm build
           fi
 
-      - name: Install Chromium
-        working-directory: studio
-        run: pnpm exec playwright install --with-deps chromium
-
       # The `e2e` Playwright project: every flow in e2e/*.test.ts, the phone flows at iPhone 13 size.
       - name: Flows
         working-directory: studio
-        run: pnpm test:e2e
+        run: ../.github/nocobase3/run-studio-browser.sh "$PWD" pnpm test:e2e
 
       # The flows' traces and failure screenshots. The `screenshots` Playwright project (`pnpm test:screenshots`)
       # asserts nothing beyond page errors and is not run on pull requests; run it locally when a change needs it.
@@ -399,7 +414,8 @@ jobs:
     name: Framework build cache
     needs: e2e
     if: ${{ always() && inputs.event_name == 'pull_request' && needs.e2e.outputs.framework-key != '' && needs.e2e.outputs.framework-cached != 'true' }}
-    runs-on: ubuntu-latest
+    # Match the Noble browser container, including native modules built on the host.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     timeout-minutes: 30
@@ -432,7 +448,7 @@ jobs:
           done
           node=$(node -p 'process.versions.node.split(".")[0]')
           digest=$(printf '%s' "$(tr ' ' '\n' <<<"$PACKAGES")" | sha256sum | cut -c1-16)
-          expected="studio-framework-dist-v1-node${node}-${FRAMEWORK_SHA}-${digest}"
+          expected="studio-framework-dist-v2-noble-x64-node${node}-${FRAMEWORK_SHA}-${digest}"
           [ "$KEY" = "$expected" ] || { echo "::error::The cache key does not match the commit and package names."; exit 1; }
           echo "key=$expected" >> "$GITHUB_OUTPUT"
 

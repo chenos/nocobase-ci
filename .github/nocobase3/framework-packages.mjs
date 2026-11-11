@@ -59,7 +59,7 @@ if (names.length === 0) throw new Error('Studio depends on no framework package.
 
 const node = process.versions.node.split('.')[0];
 const digest = createHash('sha256').update(names.join('\n')).digest('hex').slice(0, 16);
-const key = `studio-framework-dist-v1-node${node}-${sha}-${digest}`;
+const key = `studio-framework-dist-v2-noble-x64-node${node}-${sha}-${digest}`;
 const out = `packages=${names.join(' ')}\nkey=${key}\n`;
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, out);
 else process.stdout.write(out);

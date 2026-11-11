@@ -148,3 +148,23 @@ test('Test also runs the PostgreSQL query check when the branch has it', () => {
   assert.match(test, /scripts\?\.\['test:releases:postgres'\]/u);
   assert.match(test, /then pnpm test:releases:postgres; else echo /u);
 });
+
+test('checks Chromium before building and runs flows in the same browser container', () => {
+  const e2e = job('e2e');
+  const cache = job('framework-cache');
+  for (const source of [e2e, cache]) {
+    assert.match(source, /runs-on: ubuntu-24\.04/u);
+    assert.doesNotMatch(source, /container:|playwright install|apt-get/u);
+  }
+  const install = e2e.indexOf('- name: Install dependencies');
+  const browser = e2e.indexOf('- name: Verify Chromium');
+  const build = e2e.indexOf('- name: Build Studio');
+  assert.ok(install >= 0 && install < browser && browser < build);
+  assert.match(e2e, /run-studio-browser\.sh "\$PWD" node/u);
+  assert.match(e2e, /run-studio-browser\.sh "\$PWD" pnpm test:e2e/u);
+  assert.match(e2e, /await chromium\.launch\(\)/u);
+  assert.match(e2e, /await browser\.close\(\)/u);
+  assert.match(cache, /studio-framework-dist-v2-noble-x64-node/u);
+  const key = readFileSync(new URL('../framework-packages.mjs', import.meta.url), 'utf8');
+  assert.match(key, /studio-framework-dist-v2-noble-x64-node/u);
+});
