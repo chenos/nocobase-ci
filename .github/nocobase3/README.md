@@ -15,3 +15,9 @@ Run the tests with:
 ```bash
 node --test .github/nocobase3/tests/*.test.mjs
 ```
+
+## Studio E2E browser environment
+
+`Studio e2e` and `Framework build cache` run in `mcr.microsoft.com/playwright:v1.62.1-noble`, with Node 24 selected by `setup-node`. The image contains browsers, fonts and shared libraries; CI does not run `apt` or `playwright install`. The source-token helper's `jq` is fetched as a versioned, checksum-verified standalone binary. Shell steps explicitly use Bash, including the framework build's arrays and `pipefail`.
+
+After installing workspace dependencies, a short Chromium launch check runs before building Studio. A Playwright/browser mismatch fails there instead of after the build. When the lockfile changes Playwright's browser revision, update both image tags together and verify the browser launch and actual E2E flows. The framework cache uses a new `v2-noble-x64` namespace so neither job reuses older Ubuntu host builds; keep the cache environment and its writer aligned when changing the image OS or architecture.
