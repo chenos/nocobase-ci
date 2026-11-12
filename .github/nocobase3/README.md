@@ -10,6 +10,8 @@ The helpers in this directory are checked out from this repository with a sparse
 
 `validate-inputs.mjs`, `prepare-snapshot.mjs`, `mirror-workspace.mjs`, `studio-framework` and `studio-framework-gate` are copies of `2013xile/nocobase-ci`'s `.github/nocobase3/`, where `studio-ci.yml` uses them too; change both together. Like every workflow of this repository, a change reaches the pool when `main` is pushed to all of its repositories.
 
+Quality jobs let `pnpm/action-setup` read the checked-out source's `packageManager`; do not add a second pnpm version pin to the workflow.
+
 Run the tests with:
 
 ```bash
