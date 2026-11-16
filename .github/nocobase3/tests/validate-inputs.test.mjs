@@ -74,7 +74,7 @@ test('accepts only the forwarded source repositories and a plain checkout path',
 });
 
 test('recognizes main and single-level stacked v3 targets in the main repository', () => {
-  for (const targetBranch of ['v3-develop', 'v3-main', 'feat/v3-projects', 'fix/v3-stacked-pr-routing']) {
+  for (const targetBranch of ['v3', 'v3-develop', 'v3-main', 'feat/v3-projects', 'fix/v3-stacked-pr-routing']) {
     assert.doesNotThrow(() => validateInputs({ ...validPullRequest, repository: 'nocobase', targetBranch }));
   }
 
@@ -89,7 +89,7 @@ test('recognizes main and single-level stacked v3 targets in the main repository
   ]) {
     rejects(
       { repository: 'nocobase', targetBranch },
-      'target_branch for nocobase must be one of v3-develop, v3-main or match <type>/v3-<name>.',
+      'target_branch for nocobase must be one of v3, v3-develop, v3-main or match <type>/v3-<name>.',
     );
   }
 
@@ -102,7 +102,7 @@ test('recognizes main and single-level stacked v3 targets in the main repository
       prNumber: '0',
       skipLabel: 'false',
     },
-    'target_branch for nocobase must be one of v3-develop, v3-main or match <type>/v3-<name>.',
+    'target_branch for nocobase must be one of v3, v3-develop, v3-main or match <type>/v3-<name>.',
   );
 });
 
