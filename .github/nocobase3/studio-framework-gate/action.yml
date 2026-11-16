@@ -54,17 +54,24 @@ runs:
             read -r merged _ _ merge_commit < <(awk '$3 == "merged" { print; exit }' <<<"$pulls") || true
             if [ -n "$open" ]; then
               status=fail
-              message="nocobase/nocobase#$open (\`$HEAD_REF\`), the framework half of this change, has not merged yet; CI builds this pull request on its branch. Merge it first, then point vendor/nocobase3 at the v3 or v3-main commit that contains it."
+              message="nocobase/nocobase#$open (\`$HEAD_REF\`), the framework half of this change, has not merged yet; CI builds this pull request on its branch. Merge it first, then point vendor/nocobase3 at the v3 (formerly v3-develop) or v3-main commit that contains it."
             elif [ -n "${merged:-}" ]; then
-              # v3 is v3-develop renamed: fetch whichever of them exists, since fetching a missing branch fails.
-              mapfile -t refs < <(git ls-remote --heads "$PUBLIC_URL" refs/heads/v3 refs/heads/v3-develop refs/heads/v3-main \
-                | awk '$2 ~ /^refs\/heads\/v3(-develop|-main)?$/ { print "+" $2 ":refs/remotes/public/" substr($2, 12) }')
-              git -C "$vendor" fetch --quiet --no-tags --no-recurse-submodules "$PUBLIC_URL" "${refs[@]}"
+              # v3 is v3-develop renamed: fetch whichever of the two exists until the rename settles.
+              develop=$(git ls-remote --heads "$PUBLIC_URL" refs/heads/v3 refs/heads/v3-develop | awk '$2 == "refs/heads/v3" || $2 == "refs/heads/v3-develop" { print $2 }')
+              refspecs=('+refs/heads/v3-main:refs/remotes/public/v3-main')
+              for ref in $develop; do
+                refspecs+=("+$ref:refs/remotes/public/${ref#refs/heads/}")
+              done
+              if [ "${#refspecs[@]}" -eq 1 ]; then
+                echo "::error::nocobase/nocobase has neither a v3 nor a v3-develop branch."
+                exit 1
+              fi
+              git -C "$vendor" fetch --quiet --no-tags --no-recurse-submodules "$PUBLIC_URL" "${refspecs[@]}"
               if git -C "$vendor" merge-base --is-ancestor "$merge_commit" "$pointer" 2>/dev/null; then
                 message="vendor/nocobase3 (\`${pointer:0:9}\`) contains nocobase/nocobase#$merged (\`$HEAD_REF\`), the framework half of this change."
               else
                 status=fail
-                message="nocobase/nocobase#$merged (\`$HEAD_REF\`), the framework half of this change, has merged as \`${merge_commit:0:9}\`, but the committed vendor/nocobase3 (\`${pointer:0:9}\`) does not contain it. Point vendor/nocobase3 at the v3 or v3-main commit that does."
+                message="nocobase/nocobase#$merged (\`$HEAD_REF\`), the framework half of this change, has merged as \`${merge_commit:0:9}\`, but the committed vendor/nocobase3 (\`${pointer:0:9}\`) does not contain it. Point vendor/nocobase3 at the v3 (formerly v3-develop) or v3-main commit that does."
               fi
             elif [ -n "$pulls" ]; then
               message="nocobase/nocobase's pull requests from \`$HEAD_REF\` were closed without merging; the committed pointer is what Studio builds with."
