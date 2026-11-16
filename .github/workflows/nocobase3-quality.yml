@@ -4,8 +4,9 @@ name: NocoBase 3 quality
 run-name: nocobase3-quality:${{ inputs.event_name == 'pull_request' && format('PR-{0}', inputs.pr_number) || inputs.target_branch }}:${{ inputs.request_id }}
 
 # The Quality checks of NocoBase 3 in nocobase/nocobase, dispatched by nocobase-bot (docs/ci-forwarding.md there) for
-# pull requests from branches of that repository whose direct target is v3-develop, v3-main or a single-level
-# <type>/v3-<name> stacked branch, and for pushes to v3-develop or v3-main whose head commit does not say `[skip ci]`.
+# pull requests from branches of that repository whose direct target is v3 (formerly v3-develop, still accepted until the
+# rename settles), v3-main or a single-level <type>/v3-<name> stacked branch, and for pushes to v3, v3-develop or v3-main
+# whose head commit does not say `[skip ci]`.
 # Fork pull requests are not forwarded. This file is the only definition of these checks: nocobase/nocobase keeps no copy.
 #
 # The bot mirrors these job names as check runs on nocobase/nocobase, so they are a protocol: `Changed files`,
@@ -101,12 +102,12 @@ jobs:
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'base_sha must be a commit SHA.'
           case "$EVENT_NAME" in
             pull_request)
-              [[ "$TARGET_BRANCH" =~ ^(v3-develop|v3-main|[^/]+/v3-[^/]+)$ ]] || fail 'target_branch must be a v3 target.'
+              [[ "$TARGET_BRANCH" =~ ^(v3|v3-develop|v3-main|[^/]+/v3-[^/]+)$ ]] || fail 'target_branch must be a v3 target.'
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || fail 'pr_number must be a positive integer.'
               [[ ! "$BASE_SHA" =~ ^0+$ ]] || fail 'a pull request cannot use a zero base_sha.'
               ;;
             push)
-              [[ "$TARGET_BRANCH" =~ ^(v3-develop|v3-main)$ ]] || fail 'pushes are forwarded for v3-develop and v3-main only.'
+              [[ "$TARGET_BRANCH" =~ ^(v3|v3-develop|v3-main)$ ]] || fail 'pushes are forwarded for v3, v3-develop and v3-main only.'
               [ "$PR_NUMBER" = '0' ] || fail 'pr_number must be 0 for a push.'
               ;;
             *) fail 'event_name must be pull_request or push.' ;;
@@ -834,9 +835,9 @@ jobs:
         run: HEAD_SHA="$(git rev-parse HEAD)" node scripts/select-db-integration-matrix.mjs
 
       # The Pro drivers are built on what the planner treats as shared by every database (packages/libs/db, db-testkit,
-      # the root manifests and so on), so they run exactly when it selects all of them. Pro's develop follows v3-develop
-      # and its main v3-main; a pull request stacked on another branch takes the line its base has the fewest commits
-      # beyond, develop on a tie.
+      # the root manifests and so on), so they run exactly when it selects all of them. Pro's develop follows v3 (formerly
+      # v3-develop, whichever of the two this clone has) and its main v3-main; a pull request stacked on another branch
+      # takes the line its base has the fewest commits beyond, develop on a tie.
       - name: Select the Pro database drivers
         id: pro
         env:
@@ -850,12 +851,14 @@ jobs:
           should_run=$(node -e 'const [a, b] = process.argv.slice(1).map(JSON.parse); console.log(a.length === b.length && b.every((each) => a.includes(each)))' "$DATABASES" "$every")
           case "$TARGET_BRANCH" in
             v3-main) branch=main ;;
-            v3-develop) branch=develop ;;
+            v3 | v3-develop) branch=develop ;;
             *)
-              beyond_develop=$(git rev-list --count "origin/v3-develop..$BASE_SHA")
+              develop=v3
+              git rev-parse --verify --quiet "refs/remotes/origin/$develop" >/dev/null || develop=v3-develop
+              beyond_develop=$(git rev-list --count "origin/$develop..$BASE_SHA")
               beyond_main=$(git rev-list --count "origin/v3-main..$BASE_SHA")
               if [ "$beyond_main" -lt "$beyond_develop" ]; then branch=main; else branch=develop; fi
-              echo "Stacked on $TARGET_BRANCH: $beyond_develop commits beyond v3-develop, $beyond_main beyond v3-main."
+              echo "Stacked on $TARGET_BRANCH: $beyond_develop commits beyond $develop, $beyond_main beyond v3-main."
               ;;
           esac
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"

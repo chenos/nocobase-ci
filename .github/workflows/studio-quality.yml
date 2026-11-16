@@ -15,7 +15,7 @@ run-name: studio-quality:${{ inputs.event_name == 'pull_request' && format('PR-{
 # `.github/nocobase3/` are checked out from this repository, never from the forwarded source.
 #
 # Studio is the workspace root of that repository and the framework is the submodule vendor/nocobase3. Studio's two
-# long-lived branches mirror nocobase/nocobase's: `dev` tracks `v3-develop` and `main` tracks `v3-main`, and pull
+# long-lived branches mirror nocobase/nocobase's: `dev` tracks `v3` (formerly `v3-develop`) and `main` tracks `v3-main`, and pull
 # requests normally target `dev`. Every job installs the whole workspace with the pnpm of the repository's
 # `packageManager`, and runs Studio's own scripts.
 #

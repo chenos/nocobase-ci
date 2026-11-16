@@ -148,6 +148,7 @@ test('keeps the committed pointer without a same-name branch, for a push, a long
     for (const [headRef, merged, reason] of [
       ['agent/PM-9', '', /has no branch `agent\/PM-9`/u],
       ['', '', /No pull request head branch/u],
+      ['v3', '', /long-lived branch name/u],
       ['v3-develop', '', /long-lived branch name/u],
       ['main', '', /long-lived branch name/u],
       ['agent/PM-1', `42 closed merged ${context.squash}`, /nocobase\/nocobase#42 \(`agent\/PM-1`\) has merged/u],
@@ -190,6 +191,7 @@ test('the gate passes a push, a long-lived name, an unpaired branch and a change
     for (const [headRef, pulls, message] of [
       ['', '', /a push/u],
       ['main', '', /long-lived branch name/u],
+      ['v3', '', /long-lived branch name/u],
       ['agent/PM-9', '', /has no branch or pull request `agent\/PM-9`/u],
       ['agent/PM-1', '41 closed unmerged -', /closed without merging/u],
     ]) {
@@ -234,6 +236,31 @@ test('the gate fails on a merged framework half until the pointer contains its m
     assert.match(stale.summary, /does not contain it/u);
 
     // The Studio pull request moves the pointer to the v3-develop commit that contains it.
+    const vendor = path.join(context.studio, 'vendor/nocobase3');
+    context.git(vendor, 'fetch', '-q', 'origin');
+    context.git(vendor, 'checkout', '-q', context.squash);
+    context.git(context.studio, 'commit', '-q', '-am', 'bump');
+    const bumped = check(context, 'agent/PM-1', pulls);
+    assert.equal(bumped.status, 0, bumped.stderr);
+    assert.match(bumped.summary, /contains nocobase\/nocobase#5/u);
+  } finally {
+    rmSync(context.dir, { recursive: true, force: true });
+  }
+});
+
+// nocobase/nocobase renames v3-develop to v3; the gate has to work with either name.
+test('the gate finds the merge commit on v3 after v3-develop is renamed', () => {
+  const context = fixture();
+  try {
+    context.git(context.pub, 'checkout', '-q', 'v3-develop');
+    context.git(context.pub, 'merge', '-q', '--ff-only', 'squash');
+    context.git(context.pub, 'branch', '-q', '-M', 'v3-develop', 'v3');
+    context.git(context.pub, 'branch', '-q', '-D', 'agent/PM-1', 'squash');
+    const pulls = `5 closed merged ${context.squash}`;
+    const stale = check(context, 'agent/PM-1', pulls);
+    assert.notEqual(stale.status, 0);
+    assert.match(stale.summary, /does not contain it/u);
+
     const vendor = path.join(context.studio, 'vendor/nocobase3');
     context.git(vendor, 'fetch', '-q', 'origin');
     context.git(vendor, 'checkout', '-q', context.squash);
