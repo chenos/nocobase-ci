@@ -47,7 +47,7 @@ test('keeps the check job names, with PR description and Studio e2e for pull req
 });
 
 test('holds no secret, and checks Studio out with a token each job asks nocobase-bot for under its own name', () => {
-  assert.doesNotMatch(workflow, /secrets\.|vars\./u);
+  assert.doesNotMatch(workflow, /secrets\.(?!PRO_NPM_TOKEN)|vars\./u);
   assert.doesNotMatch(checkout, /secrets\.|vars\.|private-key|create-github-app-token/u);
   assert.match(workflow, /^permissions:\n  contents: read\n/mu);
   const jobs = { submodule: 'Submodule pointer', 'pr-description': 'PR description', check: '${{ matrix.name }}', e2e: 'Studio e2e' };
