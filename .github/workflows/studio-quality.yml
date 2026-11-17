@@ -262,18 +262,39 @@ jobs:
           head-ref: ${{ inputs.head_ref }}
           github-token: ${{ github.token }}
 
+      - name: Configure private npm read access
+        env:
+          PRO_NPM_TOKEN: ${{ secrets.PRO_NPM_TOKEN }}
+        run: |
+          if [ -z "$PRO_NPM_TOKEN" ]; then
+            echo "::error::PRO_NPM_TOKEN must grant read access to pkg-v3.nocobase.com."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' \
+            '@nocobase:registry=https://pkg-v3.nocobase.com/' \
+            "//pkg-v3.nocobase.com/:_authToken=$PRO_NPM_TOKEN" \
+            > "$RUNNER_TEMP/studio-npmrc"
+
       - name: Install dependencies
         working-directory: studio
         env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/studio-npmrc
           INSTALL_FLAG: ${{ steps.framework.outputs.install-flag }}
         run: pnpm install "$INSTALL_FLAG"
 
       - name: ${{ matrix.name }}
         working-directory: studio
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/studio-npmrc
         run: ${{ matrix.run }}
 
+      - name: Remove private npm credentials
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/studio-npmrc"
+
   # Studio's browser tests (docs/e2e.md in nocobase/studio) against a throwaway Studio the tests start from the build
-  # (dist/server/standalone.js), on SQLite with the demo data and a local mock model. No secrets: the server and the
+  # (dist/server/standalone.js), on SQLite with the demo data and a local mock model. Only the build needs a private package read token: the server and the
   # model are local, and nothing reaches GitHub or a model provider.
   e2e:
     name: Studio e2e
@@ -349,9 +370,24 @@ jobs:
           key: ${{ steps.framework-build.outputs.key }}
           path: studio/vendor/nocobase3/packages/*/*/dist
 
+      - name: Configure private npm read access
+        env:
+          PRO_NPM_TOKEN: ${{ secrets.PRO_NPM_TOKEN }}
+        run: |
+          if [ -z "$PRO_NPM_TOKEN" ]; then
+            echo "::error::PRO_NPM_TOKEN must grant read access to pkg-v3.nocobase.com."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' \
+            '@nocobase:registry=https://pkg-v3.nocobase.com/' \
+            "//pkg-v3.nocobase.com/:_authToken=$PRO_NPM_TOKEN" \
+            > "$RUNNER_TEMP/studio-npmrc"
+
       - name: Install dependencies
         working-directory: studio
         env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/studio-npmrc
           INSTALL_FLAG: ${{ steps.framework.outputs.install-flag }}
         run: pnpm install "$INSTALL_FLAG"
 
@@ -379,6 +415,7 @@ jobs:
       - name: Build Studio
         working-directory: studio
         env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/studio-npmrc
           FRAMEWORK_CACHED: ${{ steps.framework-cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
@@ -388,6 +425,10 @@ jobs:
           else
             pnpm build
           fi
+
+      - name: Remove private npm credentials
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/studio-npmrc"
 
       # The `e2e` Playwright project: every flow in e2e/*.test.ts, the phone flows at iPhone 13 size.
       - name: Flows
