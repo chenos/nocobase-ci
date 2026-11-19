@@ -29,3 +29,7 @@ Noble matches the host OS for native modules. The framework cache uses a new `v2
 ## Private package read access
 
 Every repository in the CI pool must configure its own `PRO_NPM_TOKEN` Actions secret with read access to `https://pkg-v3.nocobase.com/`. Studio includes the private Kingbase driver. Only the install/check and e2e build jobs receive a temporary npmrc through `NPM_CONFIG_USERCONFIG`; cleanup runs even on failure, before e2e flows and artifact upload. The public framework cache and source-checkout jobs receive no package credential. Synchronize this workflow and its tests to every pool repository; GitHub does not synchronize repository secrets with Git pushes.
+
+## Multi-tenant platform
+
+See [the platform CI integration](platform-ci.md) for workflow ownership, credential boundaries, rollout and scoped verification. The child application is not part of this integration.
