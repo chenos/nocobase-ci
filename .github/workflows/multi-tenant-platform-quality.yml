@@ -1,0 +1,123 @@
+name: Multi-tenant platform quality
+# This run name and all five job names are the nocobase-bot reporting protocol.
+run-name: multi-tenant-platform-quality:${{ inputs.event_name == 'pull_request' && format('PR-{0}', inputs.pr_number) || inputs.target_branch }}:${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Bot request UUID.
+        required: true
+        type: string
+      event_name:
+        description: Source pull_request or push.
+        required: true
+        type: string
+      head_sha:
+        description: Immutable platform head SHA.
+        required: true
+        type: string
+      base_sha:
+        description: Immutable platform base SHA.
+        required: true
+        type: string
+      target_branch:
+        description: Source target branch, main.
+        required: true
+        type: string
+      pr_number:
+        description: Source PR number, or zero for a push.
+        required: true
+        type: string
+      skip_label:
+        description: Whether the source PR has no-preview.
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: multi-tenant-platform-quality-${{ inputs.request_id }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+jobs:
+  quality:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Lint
+            command: pnpm lint && pnpm format:check
+          - name: Typecheck
+            command: pnpm typecheck
+          - name: Node tests
+            command: pnpm check:packages && pnpm exec vitest run --project node --maxWorkers=1 --passWithNoTests=false
+          - name: Client tests
+            command: pnpm exec vitest run --project client --maxWorkers=2 --passWithNoTests=false
+    steps:
+      - name: Check out trusted CI helpers
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/nocobase3
+      - uses: ./.github/nocobase3/platform-checkout
+        with:
+          job: ${{ matrix.name }}
+          request-id: ${{ inputs.request_id }}
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+          target-branch: ${{ inputs.target_branch }}
+          pr-number: ${{ inputs.pr_number }}
+          skip-label: ${{ inputs.skip_label }}
+      - uses: ./.github/nocobase3/platform-setup
+        with:
+          npm-token: ${{ secrets.PRO_NPM_TOKEN }}
+      - name: Run quality check
+        working-directory: platform
+        run: ${{ matrix.command }}
+      - name: Remove private package credentials
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/platform-npmrc"
+  build:
+    name: Build
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out trusted CI helpers
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/nocobase3
+      - uses: ./.github/nocobase3/platform-checkout
+        with:
+          job: Build
+          request-id: ${{ inputs.request_id }}
+          event-name: ${{ inputs.event_name }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+          target-branch: ${{ inputs.target_branch }}
+          pr-number: ${{ inputs.pr_number }}
+          skip-label: ${{ inputs.skip_label }}
+      - uses: ./.github/nocobase3/platform-setup
+        with:
+          npm-token: ${{ secrets.PRO_NPM_TOKEN }}
+      - name: Validate the Linux archive build
+        working-directory: platform
+        run: pnpm build --target linux-x64 --node-version 24 --tar
+      # Public CI: never upload private source, archives or test output, and never cache this application.
+      - name: Remove private package credentials
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/platform-npmrc"
