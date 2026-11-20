@@ -6,12 +6,14 @@ The workflow checks the exact head, uses the platform-only OIDC grant, revokes c
 
 Before deploying the Bot registration, merge the workflow/helpers and synchronize them from this repository's main to every active pool copy. Confirm every copy has read-only `PRO_NPM_TOKEN`: Secrets do not synchronize with Git. No child application or shared Preview environment is modified.
 
+Platform checkout disables recursive submodule handling. After source token revocation, the job validates the committed `.gitmodules` against the fixed `vendor/nocobase3` path and public `https://github.com/nocobase/nocobase.git` URL. It verifies that the gitlink is reachable from `v3`, then fetches that commit only, at depth one, without credentials or nested submodules. The log and step summary record the exact source and framework SHAs. Older source heads with no submodule report `framework=none`.
+
 ## Verification
 
 Run:
 
 ```bash
-node --test .github/nocobase3/tests/platform-quality-contract.test.mjs .github/nocobase3/tests/validate-inputs.test.mjs .github/nocobase3/tests/prepare-snapshot.test.mjs
+node --test .github/nocobase3/tests/platform-framework.test.mjs .github/nocobase3/tests/platform-quality-contract.test.mjs .github/nocobase3/tests/validate-inputs.test.mjs .github/nocobase3/tests/prepare-snapshot.test.mjs
 actionlint .github/workflows/multi-tenant-platform-quality.yml
 ```
 
