@@ -1,0 +1,33 @@
+name: Set up the sub-app application
+description: Frozen pnpm installation with temporary private-registry credentials; no caches.
+inputs:
+  npm-token:
+    description: Read-only pkg-v3.nocobase.com access.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - uses: pnpm/action-setup@v4
+      with:
+        package_json_file: sub-app/package.json
+        run_install: false
+    - name: Configure private package access
+      shell: bash
+      env:
+        PRO_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PRO_NPM_TOKEN" ]; then
+          echo '::error::Configure read-only PRO_NPM_TOKEN in this CI repository.'
+          exit 1
+        fi
+        umask 077
+        printf '%s\n' '@nocobase:registry=https://pkg-v3.nocobase.com/' "//pkg-v3.nocobase.com/:_authToken=$PRO_NPM_TOKEN" > "$RUNNER_TEMP/sub-app-npmrc"
+        echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/sub-app-npmrc" >> "$GITHUB_ENV"
+    - name: Install locked dependencies
+      shell: bash
+      working-directory: sub-app
+      run: pnpm install --frozen-lockfile
