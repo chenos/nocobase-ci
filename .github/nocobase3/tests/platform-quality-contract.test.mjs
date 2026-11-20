@@ -31,6 +31,14 @@ test('checks the exact head with a platform-only OIDC token revoked before appli
   assert.doesNotMatch(checkout, /secrets\.|studio-source-token|private-key|create-github-app-token/u);
   assert.match(checkout, /if: \$\{\{ always\(\) && steps\.source-token\.outputs\.token != '' \}\}/u);
   assert.match(checkout, /https:\/\/api.github.com\/installation\/token/u);
+  assert.match(checkout, /persist-credentials: false\n        fetch-depth: 0\n        submodules: false/u);
+  const revoke = checkout.indexOf('- name: Revoke the source token');
+  const framework = checkout.indexOf('- name: Check out the pinned framework');
+  assert.ok(revoke >= 0 && framework > revoke);
+  assert.doesNotMatch(checkout, /continue-on-error|--recursive/u);
+  assert.match(checkout.slice(framework), /working-directory: platform[\s\S]*platform-framework\.mjs/u);
+  assert.doesNotMatch(checkout.slice(framework), /if:|SOURCE_TOKEN|steps\.source-token/u);
+  assert.equal((workflow.match(/uses: \.\/\.github\/nocobase3\/platform-checkout/gu) ?? []).length, 2);
   assert.equal((workflow.match(/id-token: write/gu) ?? []).length, 2);
   assert.ok(
     workflow.indexOf('uses: ./.github/nocobase3/platform-checkout') <
