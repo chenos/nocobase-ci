@@ -21,7 +21,7 @@ test('the platform workflow matches the Bot run-name, dispatch inputs and five c
   assert.doesNotMatch(workflow, /pull_request_target|^  push:|^  pull_request:/mu);
 });
 
-test('checks the exact head with a platform-only OIDC token revoked before application installation', () => {
+test('checks the exact head with a fixed application-and-Pro OIDC token revoked before application installation', () => {
   assert.match(checkout, /repository: nocobase\/multi-tenant-platform-app/u);
   assert.match(checkout, /ref: \$\{\{ inputs\.head-sha \}\}/u);
   assert.match(checkout, /MERGE_PULL_REQUEST: 'false'/u);
@@ -34,10 +34,13 @@ test('checks the exact head with a platform-only OIDC token revoked before appli
   assert.match(checkout, /persist-credentials: false\n        fetch-depth: 0\n        submodules: false/u);
   const revoke = checkout.indexOf('- name: Revoke the source token');
   const framework = checkout.indexOf('- name: Check out the pinned framework');
-  assert.ok(revoke >= 0 && framework > revoke);
+  assert.ok(framework >= 0 && revoke > framework);
   assert.doesNotMatch(checkout, /continue-on-error|--recursive/u);
   assert.match(checkout.slice(framework), /working-directory: platform[\s\S]*platform-framework\.mjs/u);
-  assert.doesNotMatch(checkout.slice(framework), /if:|SOURCE_TOKEN|steps\.source-token/u);
+  const pinnedCheckout = checkout.slice(framework, revoke);
+  assert.match(pinnedCheckout, /PLATFORM_PRO_SOURCE_TOKEN: \$\{\{ steps\.source-token\.outputs\.token \}\}/u);
+  assert.doesNotMatch(pinnedCheckout, /if:|continue-on-error/u);
+  assert.doesNotMatch(setup, /SOURCE_TOKEN|source-token/u);
   assert.equal((workflow.match(/uses: \.\/\.github\/nocobase3\/platform-checkout/gu) ?? []).length, 2);
   assert.equal((workflow.match(/id-token: write/gu) ?? []).length, 2);
   assert.ok(
