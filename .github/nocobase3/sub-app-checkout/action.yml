@@ -49,14 +49,7 @@ runs:
         REQUEST_ID: ${{ inputs.request-id }}
         JOB: ${{ inputs.job }}
       run: |
-        set -euo pipefail
-        oidc=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=nocobase-bot" | jq -er .value)
-        echo "::add-mask::$oidc"
-        body=$(jq -n --arg request_id "$REQUEST_ID" --arg job "$JOB" '{request_id: $request_id, job: $job}')
-        answer=$(curl -fsS -X POST -H "Authorization: Bearer $oidc" -H 'content-type: application/json' --data "$body" https://bot.v2.test.nocobase.com/api/ci/multi-tenant-sub-source-token)
-        token=$(jq -er .token <<<"$answer")
-        echo "::add-mask::$token"
-        echo "token=$token" >> "$GITHUB_OUTPUT"
+        SOURCE_TOKEN_KIND=sub-app bash "$GITHUB_ACTION_PATH/../source-token.sh"
     - name: Check out the immutable sub-app head
       uses: actions/checkout@v4
       with:

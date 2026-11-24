@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const workflow = readFileSync(new URL('../../workflows/multi-tenant-platform-quality.yml', import.meta.url), 'utf8');
 const checkout = readFileSync(new URL('../platform-checkout/action.yml', import.meta.url), 'utf8');
+const tokenHelper = readFileSync(new URL('../source-token.sh', import.meta.url), 'utf8');
 const setup = readFileSync(new URL('../platform-setup/action.yml', import.meta.url), 'utf8');
 
 test('the platform workflow matches the Bot run-name, dispatch inputs and five check names', () => {
@@ -26,8 +27,9 @@ test('checks the exact head with a fixed application-and-Pro OIDC token revoked 
   assert.match(checkout, /ref: \$\{\{ inputs\.head-sha \}\}/u);
   assert.match(checkout, /MERGE_PULL_REQUEST: 'false'/u);
   assert.match(checkout, /SUBMODULES: 'false'/u);
-  assert.match(checkout, /audience=nocobase-bot/u);
-  assert.match(checkout, /api\/ci\/multi-tenant-platform-source-token/u);
+  assert.match(tokenHelper, /audience=nocobase-bot/u);
+  assert.match(tokenHelper, /multi-tenant-platform-source-token/u);
+  assert.ok(checkout.includes('SOURCE_TOKEN_KIND=platform bash "$GITHUB_ACTION_PATH/../source-token.sh"'));
   assert.doesNotMatch(checkout, /secrets\.|studio-source-token|private-key|create-github-app-token/u);
   assert.match(checkout, /if: \$\{\{ always\(\) && steps\.source-token\.outputs\.token != '' \}\}/u);
   assert.match(checkout, /https:\/\/api.github.com\/installation\/token/u);
