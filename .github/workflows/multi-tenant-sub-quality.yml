@@ -117,7 +117,7 @@ jobs:
       - name: Validate the Linux archive build
         working-directory: sub-app
         run: pnpm build --target linux-x64 --node-version 24 --tar
-      - name: Verify archive identity, target and all three Portals
+      - name: Verify archive identity, target and declared Portal packages
         run: python3 .github/nocobase3/validate-sub-app-archive.py sub-app
       - name: Discard the private archive
         if: ${{ always() }}
